@@ -1,0 +1,11 @@
+[package]
+name = "CPSC525-Project"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cc = "1.2.46"
+
+
+[build-dependencies]
+cc = "1.2.46"
