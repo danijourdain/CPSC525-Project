@@ -15,18 +15,40 @@ typedef struct order_t {
 
 
 
+
 typedef struct buffer_t {   
     Order orders[16];
     int pos;
 } Buffer;
 
+typedef struct mbmsg_t {
+    int tag;
+    union {
+        Order order;
+        int closure;
+    } msg;
+} MbMsg;
+
+typedef struct chan_node_t {
+    MbMsg contents;
+    struct chan_node_t *next;
+} ChanNode;
+
+typedef struct chan_t {
+    ChanNode *head;
+    pthread_mutex_t mutex;
+    Signal sig;
+} Channel;
 
 typedef struct masterbook_t {
     Buffer working;
     Signal book_signal;
+    Channel chan_t;
     pthread_t handle;
     _Atomic(int) should_die;
 } MasterBook;
+
+
 
 
 

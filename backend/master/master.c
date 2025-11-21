@@ -4,7 +4,7 @@
 #include <pthread.h>
 #include "../helper/helper.h"
 #include <sys/stat.h>
-
+#include "../channel/channel.h"
 
 void print_order2(Order ptr)
 {
@@ -117,6 +117,10 @@ int start_background_thread(MasterBook *handle)
 /// @return the pointer to the master server.
 MasterBook *open_master_server() {
     MasterBook *book = (MasterBook *) malloc(sizeof(MasterBook));
+
+
+    // The channel.
+    init_channel(&book->chan_t);
 
     // Initialize the signal within.
     init_signal(&book->book_signal);

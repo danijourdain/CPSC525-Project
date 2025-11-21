@@ -15,6 +15,7 @@ fn main() {
         .file("backend/signals/signal.c")
         .file("backend/helper/helper.c")
         .file("backend/master/master.c")
+        .file("backend/channel/channel.c")
         .compile("backendlib");
     
 }
