@@ -13,6 +13,8 @@
 void init_signal(Signal *sgnl)
 {
     atomic_store(&sgnl->lock, 0);
+    atomic_store(&sgnl->state, 0);
+    // sgnl->state = 0;
 }
 
 /// @brief Wakes up the futex.
@@ -43,7 +45,7 @@ static int futex_wake(_Atomic volatile int *addr, int n)
                    0);
 }
 
-void set_signal(Signal *sg, int state)
+void set_signal_immediate(Signal *sg, int state)
 {
     atomic_store(&sg->lock, state);
     futex_wake(&sg->lock, INT_MAX);
@@ -53,10 +55,26 @@ void wait_signal(Signal *sgnl, int state)
 {
     while (1)
     {
+        
+
+
         if (atomic_load(&sgnl->lock) == state)
         {
             return;
         }
         futex_wait(&sgnl->lock, state);
+    }
+}
+
+void switch_signal(Signal *sg, int start, int state) {
+    while(1)
+    {
+        int expected = start;
+        if(atomic_compare_exchange_strong(&sg->lock, &expected, state) && expected == start) {
+            // Make sure to notify of succesful changeover.
+            futex_wake(&sg->lock, INT_MAX);
+            return;
+        }
+        futex_wait(&sg->lock, start);
     }
 }

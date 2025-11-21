@@ -4,7 +4,11 @@
 #include "../structs.h"
 
 
-
+MasterBook *open_master_server();
+int close_master_server(MasterBook *ptr);
+int push_records(MasterBook *ptr, Buffer *src);
+int query_regions();
+char *get_region_name(int id);
 
 
 #endif

@@ -24,6 +24,8 @@ typedef struct buffer_t {
 typedef struct masterbook_t {
     Buffer working;
     Signal book_signal;
+    pthread_t handle;
+    _Atomic(int) should_die;
 } MasterBook;
 
 
@@ -44,6 +46,8 @@ typedef struct server_t {
     Buffer background;
     /// @brief The handle to the worker thread.
     pthread_t worker_thread;
+    
+    MasterBook *master;
 } ServerT;
 
 #endif

@@ -3,7 +3,7 @@
 #include "helper/helper.h"
 
 
-ServerT *open_server(int id);
+ServerT *open_server(int id, MasterBook *master);
 int close_server(ServerT *ptr);
 int open_record(ServerT *ptr);
 int try_lock(ServerT *handle, __uint32_t claimant);

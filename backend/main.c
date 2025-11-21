@@ -12,71 +12,69 @@
 #include <limits.h>
 #include "signals/signal.h"
 #include "main.h"
+#include "master/master.h"
 // BUFFER
 
 
 
-void background_thread(ServerT *handle)
-{
-    printf("background thread started\n");
+// void background_thread(ServerT *handle)
+// {
+//     printf("background thread started\n");
 
-    while (1)
-    {
-        wait_signal(&handle->signal, 1);
-        printf("Received a packet.\n");
+//     while (1)
+//     {
+//         wait_signal(&handle->signal, 1);
+//         printf("Received a packet.\n");
 
-        set_signal(&handle->signal, 0);
-    }
-}
+//         set_signal(&handle->signal, 0);
+//     }
+// }
 
 /// @brief Opens a new order book server with a specific ID.
 /// @param id the ID of the order server open.
 /// @return The pointer to the server handle.
-ServerT *open_server(int id)
+ServerT *open_server(int id, MasterBook *master)
 {
     ServerT *ptr = (ServerT *)malloc(sizeof(ServerT));
+
+    if(get_region_name(id) == NULL) {
+        // This is an invalid entry.
+        return NULL;
+    }
+
     ptr->id = id;
     ptr->current_order.status = 0;
+    ptr->master = master;
     init_buffer(&ptr->current);
 
     init_signal(&ptr->signal);
 
     // Start up the background worker thread.
-    start_background_thread(ptr);
+    // start_background_thread(ptr);
 
     return ptr;
 }
 
-int start_background_thread(ServerT *handle)
-{
-    pthread_t id;
+// int start_background_thread(ServerT *handle)
+// {
+//     pthread_t id;
 
-    // Launch the background thread.
-    if (pthread_create(&id, NULL, background_thread, (void *)handle) != 0)
-    {
-        return -1;
-    }
+//     // Launch the background thread.
+//     if (pthread_create(&id, NULL, background_thread, (void *)handle) != 0)
+//     {
+//         return -1;
+//     }
 
-    // Detach the background thread.
-    pthread_detach(id); // TODO: Check error.
+//     // Detach the background thread.
+//     pthread_detach(id); // TODO: Check error.
 
-    // Link the worker thread.
-    handle->worker_thread = id;
-}
+//     // Link the worker thread.
+//     handle->worker_thread = id;
 
-/// @brief Closes the server and frees the resources.
-/// @param handle the handle to the server.
-/// @return if it is succesful
-int close_server(ServerT *handle)
-{
+//     return 0;
+// }
 
-    // Commit to the background thread.
-    commit_to_background_thread(handle);
 
-    // Free the allocation by the server.
-    free((void *)handle);
-    return 1;
-}
 
 /// @brief Checks if the server is locked.
 /// @param handle the handle to the orderbook server.
@@ -88,20 +86,7 @@ int check_locked(ServerT *handle)
 
 
 
-/// @brief Commits records to file.
-/// @param handle
-/// @return
-int commit_to_file(ServerT *handle)
-{
-    // If we are locked then report we are busy.
-    if (check_locked(handle))
-    {
-        errno = EBUSY;
-        return -1;
-    }
-    // Not done.
-    return 1;
-}
+
 
 int try_lock(ServerT *handle, __uint32_t claimant)
 {
@@ -200,42 +185,18 @@ int set_money(ServerT *handle, int id)
     return 1;
 }
 
-int flush_order(ServerT *handle)
-{
-    if (buffer_pos(handle) == 15)
-    {
-        return -1; // no room to flush orders.
-    }
-    if (handle->current_order.status != 1)
-    {
-        return -1; // current order is not closed out.
-    }
-    printf("fushing orer %d\n", handle->current_order.money);
-    buffer_push(&handle->current, handle->current_order);
-    handle->current_order.status = 0;
-
-    // printf("op: %d\n", handle->current.pos);
-
-    print_buffer(&handle->current);
 
 
-    wait_signal(&handle->signal, 0);
-    transfer_buffers(&handle->current, &handle->background);
-    set_signal(&handle->signal, 1);
+// void commit_to_background_thread(ServerT *handle) {
+//     // Wait for the background thread to be ready to accept new orders.
+//     wait_signal(&handle->signal, 0);
 
-    return 0;
-}
-
-void commit_to_background_thread(ServerT *handle) {
-    // Wait for the background thread to be ready to accept new orders.
-    wait_signal(&handle->signal, 0);
-
-    //
-    transfer_buffers(&handle->current, &handle->background);
+//     //
+//     transfer_buffers(&handle->current, &handle->background);
     
-    // Notify that we have records available.
-    set_signal(&handle->signal, 1);
-}
+//     // Notify that we have records available.
+//     set_signal(&handle->signal, 1);
+// }
 
 
 
@@ -260,6 +221,34 @@ void print_buffer(Buffer *src)
     printf("]}\n");
 }
 
+int flush_order(ServerT *handle)
+{
+    if (buffer_full(&handle->current))
+    {
+        return -1; // no room to flush orders.
+    }
+    if (handle->current_order.status != 1)
+    {
+        return -1; // current order is not closed out.
+    }
+    buffer_push(&handle->current, handle->current_order);
+    handle->current_order.status = 0;
+
+
+    push_records(handle->master, &handle->current);
+    
+    // printf("op: %d\n", handle->current.pos);
+
+    // print_buffer(&handle->current);
+
+
+    // wait_signal(&handle->signal, 0);
+    // transfer_buffers(&handle->current, &handle->background);
+    // set_signal(&handle->signal, 1);
+
+    return 0;
+}
+
 void log_last_order(ServerT *handle)
 {
     if (buffer_pos(&handle->current) == 0)
@@ -271,4 +260,18 @@ void log_last_order(ServerT *handle)
         Order entry = handle->current.orders[handle->current.pos - 1];
         printf("log: %d -> %d ($%d)\n", entry.sender, entry.recipient, entry.money);
     }
+}
+
+/// @brief Closes the server and frees the resources.
+/// @param handle the handle to the server.
+/// @return if it is succesful
+int close_server(ServerT *handle)
+{
+
+    // Commit to the background thread.
+    // commit_to_background_thread(handle);
+
+    // Free the allocation by the server.
+    free((void *)handle);
+    return 1;
 }

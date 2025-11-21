@@ -1,10 +1,12 @@
-use std::io::ErrorKind;
+use core::panic;
+use std::{ffi::CStr, io::ErrorKind};
 
 
 
 #[repr(C)]
 #[derive(Clone)]
 pub struct OrderServer {
+    id: usize,
     ptr: *const ()
 }
 
@@ -15,7 +17,8 @@ unsafe extern "C" {
     ) -> std::ffi::c_int;
 
     fn open_server(
-        id: std::ffi::c_int
+        id: std::ffi::c_int,
+        master: *const ()
     ) -> *const ();
 
     fn close_server(
@@ -32,6 +35,10 @@ unsafe extern "C" {
     fn flush_order(
         ptr: *const ()
     ) -> core::ffi::c_int;
+    pub fn open_master_server() -> *const ();
+    pub fn close_master_server(ptr: *const ()) -> core::ffi::c_int;
+    fn query_regions() -> core::ffi::c_int;
+    fn get_region_name(id: core::ffi::c_int) -> *const core::ffi::c_char;
     // fn set_sender(
     //     ptr: *const (),
     //     id: core::ffi::c_int
@@ -49,11 +56,46 @@ unsafe extern "C" {
     fn fetch_current_user(ptr: *const ()) -> u32;
 }
 
-impl OrderServer {
-    pub fn open(id: i32) -> Self {
+#[repr(transparent)]
+pub struct MasterOrderBook {
+    handle: *const ()
+}
+
+impl MasterOrderBook {
+    pub fn new() -> Self {
         Self {
-            ptr: unsafe { open_server(id) }
+            handle: unsafe { open_master_server() }
         }
+    }
+    pub fn available_regions() -> usize {
+        return unsafe { query_regions() }.try_into().expect("Returned a negative number of regions.")
+    }
+}
+
+impl Drop for MasterOrderBook {
+    fn drop(&mut self) {
+        // Here we will ignore the errors since we are closing
+        // it anyways.
+        unsafe { close_master_server(self.handle) };
+    }
+}
+
+
+impl OrderServer {
+    pub fn open(id: i32, master: &MasterOrderBook) -> Self {
+        let ptr = unsafe { open_server(id, master.handle) };
+        if ptr.is_null() {
+            panic!("specified an invalid region.");
+        }
+        Self {
+            id: id as usize,
+            ptr
+        }
+    }
+    pub fn get_name(&self) -> &str {
+        let ptr = unsafe { get_region_name(self.id as i32) };
+        let cstr = unsafe { CStr::from_ptr(ptr) };
+        cstr.to_str().expect("Failed to read region name")
     }
     pub fn open_record(&self) -> std::io::Result<()> {
 

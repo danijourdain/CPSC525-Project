@@ -1,13 +1,20 @@
-use std::{thread::sleep, time::Duration};
+use std::{process::exit, thread::sleep, time::Duration};
 
-use crate::backend::bindings::{OrderServer};
+use crate::backend::bindings::{MasterOrderBook, OrderServer, close_master_server, open_master_server};
 
 
 pub mod backend;
 
 fn main() {
 
-    let server = OrderServer::open(0);
+
+    let master = MasterOrderBook::new();
+
+    println!("available regions: {:?}", MasterOrderBook::available_regions());
+
+
+    let server = OrderServer::open(0, &master);
+    println!("Started server on region: {}", server.get_name());
 
     server.open_record().unwrap();
     server.set_money(35).unwrap();
