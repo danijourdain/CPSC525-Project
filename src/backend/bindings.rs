@@ -18,6 +18,11 @@ unsafe extern "C" {
         id: std::ffi::c_int
     ) -> *const ();
 
+    fn close_server(
+        ptr: *const ()
+    ) -> core::ffi::c_int;
+
+
     fn open_record(
         ptr: *const ()
     ) -> std::ffi::c_int;
@@ -27,14 +32,14 @@ unsafe extern "C" {
     fn flush_order(
         ptr: *const ()
     ) -> core::ffi::c_int;
-    fn set_sender(
-        ptr: *const (),
-        id: core::ffi::c_int
-    ) -> core::ffi::c_int;
-    fn set_recipient(
-        ptr: *const (),
-        id: core::ffi::c_int
-    ) -> core::ffi::c_int;
+    // fn set_sender(
+    //     ptr: *const (),
+    //     id: core::ffi::c_int
+    // ) -> core::ffi::c_int;
+    // fn set_recipient(
+    //     ptr: *const (),
+    //     id: core::ffi::c_int
+    // ) -> core::ffi::c_int;
     fn set_money(
         ptr: *const (),
         id: core::ffi::c_int
@@ -98,6 +103,12 @@ impl OrderServer {
     }
 }
 
+
+impl Drop for OrderServer {
+    fn drop(&mut self) {
+        unsafe { close_server(self.ptr) };
+    }
+}
 
 // We assume that these are thread safe, which
 // introduces the vulnerability.
