@@ -72,20 +72,29 @@ void background_thread(MasterBook *handle)
 
 
     // Notify the main thread that we are setup.
-    switch_signal(&handle->book_signal, SIGNAL_LOCKED2, SIGNAL_READY2);
+    // switch_signal(&handle->book_signal, SIGNAL_LOCKED2, SIGNAL_READY2);
 
     while (1)
     {
-        switch_signal(&handle->book_signal, SIGNAL_READY, SIGNAL_LOCKED2);
-        if(atomic_load(&handle->should_die)) {
-            // In this case we were told to die.
-            break;
+        MbMsg msg = pop_channel(&handle->chan_t);
+        if(msg.tag == 0) {
+
+        } else if(msg.tag == 1) {
+            return;
         }
-        printf("Received a packet.\n");
+        printf("got a message\n");
 
-        print_buffer2(&handle->working);
 
-        switch_signal(&handle->book_signal, SIGNAL_LOCKED2, SIGNAL_EMPTY);
+        // switch_signal(&handle->book_signal, SIGNAL_READY, SIGNAL_LOCKED2);
+        // if(atomic_load(&handle->should_die)) {
+        //     // In this case we were told to die.
+        //     break;
+        // }
+        // printf("Received a packet.\n");
+
+        // print_buffer2(&handle->working);
+
+        // switch_signal(&handle->book_signal, SIGNAL_LOCKED2, SIGNAL_EMPTY);
     }
 
     // The cleanup code.
@@ -134,7 +143,7 @@ MasterBook *open_master_server() {
     start_background_thread(book);
 
 
-    switch_signal(&book->book_signal, SIGNAL_READY2, SIGNAL_EMPTY);
+    // switch_signal(&book->book_signal, SIGNAL_READY2, SIGNAL_EMPTY);
     return book;
 }
 
@@ -142,16 +151,26 @@ MasterBook *open_master_server() {
 
 int push_records(MasterBook *ptr, Buffer *src) {
     printf("pushing recordsss...\n");
-    // Raise it to the locked status.
-    switch_signal(&ptr->book_signal, SIGNAL_EMPTY, SIGNAL_LOCKED);
+    // // Raise it to the locked status.
+    // switch_signal(&ptr->book_signal, SIGNAL_EMPTY, SIGNAL_LOCKED);
 
-    // Write records.
-    int items = transfer_buffers(src, &ptr->working);
+    // // // Write records.
+    // // int items = transfer_buffers(src, &ptr->working);
 
 
-    // Raise the lock to ready so that the background thread can acquire.
-    switch_signal(&ptr->book_signal, SIGNAL_LOCKED, SIGNAL_READY);
-    return items;
+
+
+    // // Raise the lock to ready so that the background thread can acquire.
+    // switch_signal(&ptr->book_signal, SIGNAL_LOCKED, SIGNAL_READY);
+
+
+    MbMsg msg;
+    msg.tag = 0;
+    msg.msg.order = src->orders[0];
+
+    push_channel(&ptr->chan_t, msg);
+    
+    return 0;
 }
 
 
@@ -166,8 +185,12 @@ int close_master_server(MasterBook *ptr) {
     
     printf("Waiting..\n");
     // We force the signal up, closing out the order book.
-    atomic_store(&ptr->should_die, 1);
-    set_signal_immediate(&ptr->book_signal, SIGNAL_READY);
+    // atomic_store(&ptr->should_die, 1);
+    // set_signal_immediate(&ptr->book_signal, SIGNAL_READY);
+
+    MbMsg kill;
+    kill.tag = 1;
+    push_channel(&ptr->chan_t, kill);
 
 
     printf("bru\n");

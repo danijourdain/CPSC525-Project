@@ -33,15 +33,56 @@ void push_channel(Channel *chan, MbMsg msg) {
     }
 
 
+    // Now we have an item in the channel.
+    set_signal_immediate(&chan->sig, 1);
+
     // Unlock the mutex.
     pthread_mutex_unlock(&chan->mutex);
 
-    set_signal_immediate(&chan->sig, 1);
+    
 }
 
 
 
 MbMsg pop_channel(Channel *chan) {
-    wait_signal(&chan->sig, 1);
+    while(1) {
+        // Wait for there to be items in the channel.
+        wait_signal(&chan->sig, 1);
+        // Lock the mutex.
+        pthread_mutex_lock(&chan->mutex);
+
+        
+        if(chan->head != NULL) {
+            // If there is ACTUALLY an item.
+            ChanNode *next = chan->head->next;
+
+            // Extract the payload by copying it out.
+            MbMsg payload = chan->head->contents;
+
+     
+            // Now we free the current head.
+            free((void *) chan->head);
+
+
+            // Set the head to the next item.
+            chan->head = next;
+
+            if(next == NULL) {
+                // Lower the signal.
+                set_signal_immediate(&chan->sig, 0);
+            }
+        
+            // Unlock the mutex and return early.
+            pthread_mutex_unlock(&chan->mutex);
+            return payload;
+        }
+
+
+        // Unlock the mutex.
+        pthread_mutex_unlock(&chan->mutex);
+    }
+    
+
+
 
 }
