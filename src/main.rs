@@ -33,16 +33,21 @@ fn main() {
     // sleep(Duration::from_millis(200));
 
 
-     let master = MasterOrderBook::new();
-     let server = OrderServer::open(0, &master);
+    let mut master = MasterOrderBook::new();
+    master.open_new_order_book(0);
 
-    let barrier = Barrier::new(2);
+    let server = master.get_book(0);
+    println!("balance: {:?}", server.get_balance());
 
-    server.open_record().unwrap();
-    server.set_sender(0).unwrap();
-    server.set_recipient(1).unwrap();
-    server.set_money(35).unwrap();
-    server.flush_record().unwrap();
+    //  let server = OrderServer::open(0, &master);
+
+    // let barrier = Barrier::new(2);
+
+    // server.open_record().unwrap();
+    // server.set_sender(0).unwrap();
+    // server.set_recipient(1).unwrap();
+    // server.set_money(35).unwrap();
+    // server.flush_record().unwrap();
 
 
     if false {
@@ -53,91 +58,91 @@ fn main() {
     // server.try_lock().unwrap();
     // server.try_lock().unwrap();
 
-    std::thread::scope(|s| {
+    // std::thread::scope(|s| {
         
 
-        s.spawn(|| {
-            let mut i = 0;
-            let mut secondary = 0;
-            let mut acc = 0;
-            loop {
-                // println!("Trying lock at: {:?}", SystemTime::now());
-                if server.try_lock("bluecircle123").is_ok() {
-                    acc += 1;
-                    sleep(Duration::from_millis(100));
-                    server.release_lock(32);
-                }
+    //     s.spawn(|| {
+    //         let mut i = 0;
+    //         let mut secondary = 0;
+    //         let mut acc = 0;
+    //         loop {
+    //             // println!("Trying lock at: {:?}", SystemTime::now());
+    //             if server.try_lock("bluecircle123").is_ok() {
+    //                 acc += 1;
+    //                 sleep(Duration::from_millis(100));
+    //                 server.release_lock(32);
+    //             }
 
 
-                if i == THRESH {
+    //             if i == THRESH {
 
-                    println!("hey... {secondary} {acc}");
-                    secondary += 1;
-                    i = 0;
-                }
+    //                 println!("hey... {secondary} {acc}");
+    //                 secondary += 1;
+    //                 i = 0;
+    //             }
                 
-                i += 1;
+    //             i += 1;
 
-                // server.try_lock(32).unwrap();
+    //             // server.try_lock(32).unwrap();
 
-                // soemthing
-                // println!("user: {:?}", server.fetch_current_user());
+    //             // soemthing
+    //             // println!("user: {:?}", server.fetch_current_user());
        
-                // server.release_lock(32);
-            }
-        });
+    //             // server.release_lock(32);
+    //         }
+    //     });
 
-        s.spawn(|| {
-            let mut i = 0;
-            let mut secondary = 0;
-            let mut acc =0 ;
-            loop {
-                // println!("Adversary tyring at @ {:?}", SystemTime::now());
-                if server.try_lock("susss").is_ok() {
-                    // let mut current = 12;
-                    // for i in 0..1000 {
-                    //     let id = server.fetch_current_user();
-                    //     if id != 12 {
-                    //         println!("broken...");
+    //     s.spawn(|| {
+    //         let mut i = 0;
+    //         let mut secondary = 0;
+    //         let mut acc =0 ;
+    //         loop {
+    //             // println!("Adversary tyring at @ {:?}", SystemTime::now());
+    //             if server.try_lock("susss").is_ok() {
+    //                 // let mut current = 12;
+    //                 // for i in 0..1000 {
+    //                 //     let id = server.fetch_current_user();
+    //                 //     if id != 12 {
+    //                 //         println!("broken...");
 
-                    //         // server.open_record().unwrap();
-                    //         // server.set_money(35).unwrap();
-                    //         // server.flush_record().unwrap();
-                    //         // server.log_last_order();;
+    //                 //         // server.open_record().unwrap();
+    //                 //         // server.set_money(35).unwrap();
+    //                 //         // server.flush_record().unwrap();
+    //                 //         // server.log_last_order();;
                             
 
-                    //         current = id;
-                    //         break;
-                    //     }
+    //                 //         current = id;
+    //                 //         break;
+    //                 //     }
                         
-                    // }  
+    //                 // }  
 
-                    server.open_record().unwrap();
+    //                 server.open_record().unwrap();
             
-                    server.set_money(30).unwrap();
+    //                 server.set_money(30).unwrap();
 
-                    server.flush_record().unwrap();
-                    // println!("BROKEN...");
-                    // sleep(Duration::from_millis(100));
-                    acc += 1;
-                    // println!("Broken....");
-                    server.release_lock(12);
-                }
+    //                 server.flush_record().unwrap();
+    //                 // println!("BROKEN...");
+    //                 // sleep(Duration::from_millis(100));
+    //                 acc += 1;
+    //                 // println!("Broken....");
+    //                 server.release_lock(12);
+    //             }
 
-                if i == THRESH {
+    //             if i == THRESH {
 
-                    println!("wow... {secondary} {acc}");
-                    secondary += 1;
-                    i = 0;
-                }
+    //                 println!("wow... {secondary} {acc}");
+    //                 secondary += 1;
+    //                 i = 0;
+    //             }
                 
-                i += 1;
-            }
+    //             i += 1;
+    //         }
             
-        });
+    //     });
 
 
-    });
+    // });
     }
     // server.log_last_order();
 

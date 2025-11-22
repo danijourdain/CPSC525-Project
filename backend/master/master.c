@@ -177,6 +177,20 @@ int ledger_writeback(MasterBook *handle) {
 }
 
 
+/// @brief Gets the balance of a particular region.
+/// @param handle The handle.
+/// @param region The particular region we are interested in.
+/// @return Returns a balance.
+int get_balance(MasterBook *handle, int region) {
+    if(region > 0 || region > REGIONS) {
+        return -1;
+    }
+    pthread_mutex_lock(&handle->balance_mutex);
+    int value = handle->balances[region];
+    pthread_mutex_unlock(&handle->balance_mutex);
+    return value;
+}
+
 /// @brief The executable for the background thread.
 /// @param handle The handle to the master order book.
 void background_thread(MasterBook *handle)
@@ -214,10 +228,14 @@ void background_thread(MasterBook *handle)
 
       
             // Perform the money transfer.
+            pthread_mutex_lock(&handle->balance_mutex);
             handle->balances[order.sender] -= order.money;
             handle->balances[order.recipient] += order.money;
+            
 
+            // Perform a writeback, we ignore errors here.
             ledger_writeback(handle);
+            pthread_mutex_unlock(&handle->balance_mutex);
 
         } else if(msg.tag == MSG_CLOSE) {
             // This is the shutdown message.
@@ -374,6 +392,10 @@ MasterBook *open_master_server() {
     // Set the ledger file descriptor.
     book->ledger_fd = ledger_fd;
    
+
+
+    // Initialize the mutex.
+    pthread_mutex_init(&book->balance_mutex, NULL);
        
 
     // log the balances.
@@ -459,6 +481,9 @@ int close_master_server(MasterBook *ptr) {
 
     // Finally we free up the ledger.
     fclose(ptr->ledger_fd);
+
+    // Destroy the mutex.
+    pthread_mutex_destroy(&ptr->balance_mutex);
 
 
     // Free the memory.

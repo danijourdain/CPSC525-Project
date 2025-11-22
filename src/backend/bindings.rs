@@ -7,7 +7,8 @@ use std::{ffi::{CStr, CString}, io::ErrorKind};
 #[derive(Clone)]
 pub struct OrderServer {
     id: usize,
-    ptr: *const ()
+    ptr: *const (),
+    master_ptr: *const ()
 }
 
 unsafe extern "C" {
@@ -39,14 +40,6 @@ unsafe extern "C" {
     pub fn close_master_server(ptr: *const ()) -> core::ffi::c_int;
     fn query_regions() -> core::ffi::c_int;
     fn get_region_name(id: core::ffi::c_int) -> *const core::ffi::c_char;
-    // fn set_sender(
-    //     ptr: *const (),
-    //     id: core::ffi::c_int
-    // ) -> core::ffi::c_int;
-    // fn set_recipient(
-    //     ptr: *const (),
-    //     id: core::ffi::c_int
-    // ) -> core::ffi::c_int;
     fn set_money(
         ptr: *const (),
         id: core::ffi::c_int
@@ -59,14 +52,19 @@ unsafe extern "C" {
         ptr: *const (),
         id: core::ffi::c_int
     ) -> core::ffi::c_int;
+    fn get_balance(
+        ptr: *const (),
+        region: core::ffi::c_int
+    ) -> core::ffi::c_int;
     fn try_lock(ptr: *const (), password: *const core::ffi::c_char) -> core::ffi::c_int;
     fn release_lock(ptr: *const (), val: u32);
     fn fetch_current_user(ptr: *const ()) -> u32;
 }
 
-#[repr(transparent)]
+
 pub struct MasterOrderBook {
-    handle: *const ()
+    handle: *const (),
+    servers: Vec<OrderServer>
 }
 
 impl MasterOrderBook {
@@ -76,8 +74,16 @@ impl MasterOrderBook {
             panic!("failed to initialize the master order book!");
         }
         Self {
-            handle: ptr
+            handle: ptr,
+            servers: vec![]
         }
+    }
+    pub fn open_new_order_book(&mut self, id: i32) {
+        let order = OrderServer::open(id, &*self);
+        self.servers.push(order);
+    }
+    pub fn get_book(&self, id: i32) -> &OrderServer {
+        &self.servers[id as usize]
     }
     pub fn available_regions() -> usize {
         return unsafe { query_regions() }.try_into().expect("Returned a negative number of regions.")
@@ -86,6 +92,10 @@ impl MasterOrderBook {
 
 impl Drop for MasterOrderBook {
     fn drop(&mut self) {
+
+        // Force the sub-books to be dropped first for proper RAII.
+        self.servers.clear();
+
         // Here we will ignore the errors since we are closing
         // it anyways.
         unsafe { close_master_server(self.handle) };
@@ -107,14 +117,15 @@ where
 
 
 impl OrderServer {
-    pub fn open(id: i32, master: &MasterOrderBook) -> Self {
+    fn open(id: i32, master: &MasterOrderBook) -> Self {
         let ptr = unsafe { open_server(id, master.handle) };
         if ptr.is_null() {
             panic!("specified an invalid region.");
         }
         Self {
             id: id as usize,
-            ptr
+            ptr,
+            master_ptr: master.handle
         }
     }
     pub fn get_name(&self) -> &str {
@@ -132,6 +143,9 @@ impl OrderServer {
         }
 
         Ok(())
+    }
+    pub fn get_balance(&self) -> i32 {
+        unsafe { get_balance(self.master_ptr, self.id as i32) }
     }
     pub fn flush_record(&self) -> std::io::Result<()> {
 
@@ -182,6 +196,7 @@ impl OrderServer {
 
 impl Drop for OrderServer {
     fn drop(&mut self) {
+        
         unsafe { close_server(self.ptr) };
     }
 }

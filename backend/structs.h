@@ -57,6 +57,7 @@ typedef struct masterbook_t {
     FILE *ledger_fd;
     pthread_t handle;
     int balances[REGIONS];
+    pthread_mutex_t balance_mutex;
     _Atomic(int) should_die;
 } MasterBook;
 
