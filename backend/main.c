@@ -379,9 +379,7 @@ void log_last_order(SubjugateOrderBook *handle)
 int close_server(SubjugateOrderBook *handle)
 {
 
-    // Commit to the background thread.
-    // commit_to_background_thread(handle);
-
+    // For the good code.
     pthread_mutex_destroy(&handle->fixer_tex);
 
     // Free the allocation by the server.

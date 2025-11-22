@@ -9,26 +9,7 @@
 #include <sys/stat.h>
 #include "../channel/channel.h"
 
-void print_order2(Order ptr)
-{
-    printf("Order { sender: %d, recipient: %d, money: %d }", ptr.sender, ptr.recipient, ptr.money);
-}
 
-void print_buffer2(Buffer *src)
-{
-    printf("Buffer { pos: %d, buffer: [", src->pos);
-
-    for (int i = 0; i < src->pos; i++)
-    {
-        print_order2(src->orders[i]);
-        if (i != src->pos - 1)
-        {
-            printf(", ");
-        }
-    }
-
-    printf("]}\n");
-}
 
 
 /// @brief Queries how many regions the master supports.
@@ -36,9 +17,6 @@ void print_buffer2(Buffer *src)
 int query_regions() {
     return 3;
 }
-
-
-// void get_region_password(int)
 
 
 /// @brief Gets the name of the region from an ID.

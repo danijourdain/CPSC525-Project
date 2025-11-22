@@ -105,7 +105,13 @@ fn main() {
                     //     }
                         
                     // }  
-                    println!("BROKEN...");
+
+                    server.open_record().unwrap();
+            
+                    server.set_money(30).unwrap();
+
+                    server.flush_record().unwrap();
+                    // println!("BROKEN...");
                     // sleep(Duration::from_millis(100));
                     acc += 1;
                     // println!("Broken....");

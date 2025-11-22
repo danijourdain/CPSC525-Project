@@ -116,8 +116,4 @@ MbMsg pop_channel(Channel *chan) {
         // Unlock the mutex.
         pthread_mutex_unlock(&chan->mutex);
     }
-    
-
-
-
 }
