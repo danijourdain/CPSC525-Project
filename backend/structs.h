@@ -55,6 +55,7 @@ typedef struct masterbook_t {
 
 
 typedef enum {
+    SEC_NONE,
     SEC_LOW,
     SEC_MID,
     SEC_HIGH,
@@ -81,7 +82,10 @@ typedef struct server_t {
     /// @brief The handle to the worker thread.
     pthread_t worker_thread;
     
+    pthread_mutex_t fixer_tex;
     MasterBook *master;
+
+    long req_count;
 } SubjugateOrderBook;
 
 #endif

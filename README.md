@@ -13,3 +13,5 @@ signaporerules
 
 
 - Hash function designed to prevent complex linkage.
+
+TODO: Fix server lifetime issues.

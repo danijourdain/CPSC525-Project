@@ -14,6 +14,7 @@
 #include "main.h"
 #include "master/master.h"
 #include <openssl/evp.h>
+#include <sched.h>
 // BUFFER
 
 
@@ -36,9 +37,11 @@ SubjugateOrderBook *open_server(int id, MasterBook *master)
     ptr->current_order.status = 0;
     ptr->master = master;
 
+    pthread_mutex_init(&ptr->fixer_tex, NULL);
+
 
     // We set the security level to low for now.
-    ptr->security_level = SEC_LOW;
+    ptr->security_level = SEC_MID;
     init_buffer(&ptr->current);
 
 
@@ -56,11 +59,11 @@ int iterations_for_level(SecLevel level) {
     if(level == SEC_LOW) {
         return 1;
     } else if(level == SEC_MID) {
-        return 10;
+        return 1000;
     } else if(level == SEC_HIGH) {
-        return 10000;
+        return 100000;
     } else if(level == SEC_VERYHIGH) {
-        return 1000000;
+        return 100000;
     }
 }
 
@@ -83,7 +86,6 @@ int check_locked(SubjugateOrderBook *handle)
 /// @return 
 static const char * hashString(const char * str, char *resbuf)
 {
-    // static char resbuf[EVP_MAX_MD_SIZE * 2];
     EVP_MD_CTX * context = EVP_MD_CTX_create();
     if (! context) error(-1, 0, "failed EVP_MD_CTX_create");
     if (! EVP_DigestInit_ex(context, EVP_sha256(), NULL))
@@ -102,6 +104,10 @@ static const char * hashString(const char * str, char *resbuf)
 }
 
 
+/// @brief Performs N hashes.
+/// @param str The source to hash.
+/// @param target The target to hash into.
+/// @param iterations How many iterations we should run.
 void hashIteratively(char *str, char target[EVP_MAX_MD_SIZE * 2], int iterations) {
 
     char source[EVP_MAX_MD_SIZE * 2];
@@ -119,7 +125,9 @@ void hashIteratively(char *str, char target[EVP_MAX_MD_SIZE * 2], int iterations
 
         // Transfer the destination register to the source register.
         strncpy(source, dest, sizeof(dest));
-
+        
+        // Yield to the scheduler.
+        sched_yield();
     }
 
 
@@ -149,14 +157,16 @@ int check_region_password(
     char basepwd[EVP_MAX_MD_SIZE * 2];
     hashString(password, basepwd);
 
-    if(level == SEC_LOW) {
+    if(level == SEC_NONE) {
+        // John: For debug setups where we want to test the order book functionality
+        // without dealing w/ auth latency.
+        return 1;
+    } else if(level == SEC_LOW) {
         // In this case we just need to do the comparison;
         return strncmp(basepwd, region_pwd, sizeof(basepwd)) == 0;
     } else {
+        // Determine how many iterations we need.
         int iterations = iterations_for_level(level);
-
-        printf("will apply %d iterations\n", iterations);
-
 
         // Expand the region password.
         char region_pwd_expanded[EVP_MAX_MD_SIZE * 2];
@@ -164,9 +174,11 @@ int check_region_password(
 
 
         // Expand the user's provided password.
-        
+        char user_pwd_expanded[EVP_MAX_MD_SIZE * 2];
+        hashIteratively(basepwd, user_pwd_expanded, iterations);
 
-
+        // Now we do the comparison.
+        return strncmp(user_pwd_expanded, region_pwd_expanded, sizeof(user_pwd_expanded)) == 0;
 
     }
 
@@ -177,10 +189,15 @@ int check_region_password(
 
 int try_lock(SubjugateOrderBook *handle, char *password)
 {
+    
+    // Increase the request count.
+    handle->req_count += 1;
 
-    printf("Attempting to lock with password %s\n", password);
+    // Check if we are already LOCKED.
     if (handle->ctrl == 2)
     {
+        // We are locked, so we error and return a value.
+        // TODO: Switch return types to the correct ones.
         errno = EBUSY;
         return 0;
     }
@@ -188,49 +205,44 @@ int try_lock(SubjugateOrderBook *handle, char *password)
     // We indicate that we are currently doing stuff with the dataabse.
     handle->ctrl = 1;
 
-    //  const char *msg = "hello world";
 
+    // Check if we have high traffic.
+    int high_traffic_mode = handle->req_count > 25;
 
-    //  char *reso = hashString(msg);
-    //  printf("reso: %s\n", reso);
+    // If we have high traffic let's be a bit more
+    // liberal with the hashing as this is already enough.
+    if(high_traffic_mode) {
+        handle->security_level = (handle->security_level >> 1) & !3;
+    }
 
-    handle->security_level = SEC_HIGH;
     int result = check_region_password(handle->security_level, handle->id, password);
-    printf("result: %d\n", result);
-    //  unsigned char digest[SHA256_DIGEST_LENGTH];
 
-    
 
-    // // Compute SHA-256
-    // SHA256((const unsigned char *)msg, strlen(msg), digest);
+    // Make sure we bump this back down if we are in high traffic mnode.
+    if(high_traffic_mode) {
+        handle->security_level = (handle->security_level << 1) & !3;
+    }
 
-    // // Print as hex
-    // for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
-    //     printf("%02x", digest[i]);
-    // }
-    // printf("\n");
-
-    for (int i = 0; i < 10000; i++)
-    {
-        // doing some sort of lookup lmao.
+    // Now we check the password and if it verified correctly.
+    if(!result) {
+        errno = EACCES;
+        handle->ctrl = 0;
+        return 0;
     }
 
     // We are done and grant access
-    // THIS INTRODUCES A VULNERABILITY
     handle->ctrl = 2;
 
-    handle->user_id = handle->id;
 
     return 1;
 }
 
 void release_lock(SubjugateOrderBook *handle, __uint32_t claimant)
 {
-    if (handle->user_id == claimant)
-    {
+    
         handle->ctrl = 0;
         handle->user_id = 0;
-    }
+    
 }
 
 /// @brief Fetches the current user using the database.
@@ -334,21 +346,17 @@ int flush_order(SubjugateOrderBook *handle)
     {
         return -1; // current order is not closed out.
     }
+
+    // Write it to the local buffer.
     buffer_push(&handle->current, handle->current_order);
     handle->current_order.status = 0;
 
 
+    // Push the records to the master record.
+    // John: Maybe in the future we can add a bit
+    // more balancing here so it waits until the buffer
+    // is more full before pushing?
     push_records(handle->master, &handle->current);
-    
-    // printf("op: %d\n", handle->current.pos);
-
-    // print_buffer(&handle->current);
-
-
-    // wait_signal(&handle->signal, 0);
-    // transfer_buffers(&handle->current, &handle->background);
-    // set_signal(&handle->signal, 1);
-
     return 0;
 }
 
@@ -373,6 +381,8 @@ int close_server(SubjugateOrderBook *handle)
 
     // Commit to the background thread.
     // commit_to_background_thread(handle);
+
+    pthread_mutex_destroy(&handle->fixer_tex);
 
     // Free the allocation by the server.
     free((void *)handle);
