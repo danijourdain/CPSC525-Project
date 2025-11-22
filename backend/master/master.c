@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <string.h>
 #include "../helper/helper.h"
 #include <sys/stat.h>
 #include "../channel/channel.h"
@@ -51,54 +54,83 @@ char *get_region_name(int id) {
 }
 
 
-void setup_database() {
+/// @brief Configures the database, writing the header if necessary.
+/// @return The file descriptor of the database.
+int preconfigure_database() {
     char *name = "database.csv";
     struct stat buffer;
 
 
+    int did_exist = 0;
     // Let us first check if the database exists (i.e., do we need to write
     // the header file)
     if(stat(name, &buffer) == 0) {
         // The database already exists. We are already setup.
+        did_exist = 1;
     } else {
         // We need to create the database since it does not exist.
+        did_exist = 0;
     }
+
+
+    // Create the database on disk.
+    int fd = open(name, O_WRONLY | O_APPEND | O_CREAT, 0644);
+    if(fd == -1) {
+        return -1; // failed to open the database.
+    }
+
+    if(!did_exist) {
+        // If the file did not exist we need to start by writing the header.
+        char *header = "sender,recipient,money\n";
+        int result = write(fd, (void *) header, sizeof(char) * strlen(header));
+        if(result == -1) {
+            close(fd); // Close the file and propagate the error.
+            return -1;
+        }
+    }
+    return fd;
+
+
 }
 
 
 
+
+/// @brief The executable for the background thread.
+/// @param handle The handle to the master order book.
 void background_thread(MasterBook *handle)
 {
+ 
+    // Setup the database on the disk, this just
+    // creates it if it does not exist.
+    int db_fd = preconfigure_database();
+    if(db_fd == -1) {
+        return -1; // Bubble the error up.
+    }
 
 
-    // Notify the main thread that we are setup.
-    // switch_signal(&handle->book_signal, SIGNAL_LOCKED2, SIGNAL_READY2);
 
     while (1)
     {
         MbMsg msg = pop_channel(&handle->chan_t);
         if(msg.tag == 0) {
 
+            Order order = msg.msg.order;
+
+            print_order2(order);
+            printf("\n");
+
         } else if(msg.tag == 1) {
-            return;
+            // This is the shutdown message.
+            break;
         }
-        printf("got a message\n");
-
-
-        // switch_signal(&handle->book_signal, SIGNAL_READY, SIGNAL_LOCKED2);
-        // if(atomic_load(&handle->should_die)) {
-        //     // In this case we were told to die.
-        //     break;
-        // }
-        // printf("Received a packet.\n");
-
-        // print_buffer2(&handle->working);
-
-        // switch_signal(&handle->book_signal, SIGNAL_LOCKED2, SIGNAL_EMPTY);
     }
 
     // The cleanup code.
     printf("cleaning up...");
+    
+    // Close the database.
+    close(db_fd);
 }
 
 
@@ -149,28 +181,25 @@ MasterBook *open_master_server() {
 
 
 
+/// @brief Pushes records to the Master Order Book
+/// @param ptr the pointer to the master order book.
+/// @param src the source buffer to empty
+/// @return how many items were pushed.
 int push_records(MasterBook *ptr, Buffer *src) {
-    printf("pushing recordsss...\n");
-    // // Raise it to the locked status.
-    // switch_signal(&ptr->book_signal, SIGNAL_EMPTY, SIGNAL_LOCKED);
 
-    // // // Write records.
-    // // int items = transfer_buffers(src, &ptr->working);
+    int items = src->pos;
+    for(int i = 0; i < items; i++) {
+        // Create a message.
+        MbMsg msg;
+        msg.tag = 0;
+        msg.msg.order = src->orders[i];
 
-
-
-
-    // // Raise the lock to ready so that the background thread can acquire.
-    // switch_signal(&ptr->book_signal, SIGNAL_LOCKED, SIGNAL_READY);
-
-
-    MbMsg msg;
-    msg.tag = 0;
-    msg.msg.order = src->orders[0];
-
-    push_channel(&ptr->chan_t, msg);
-    
-    return 0;
+        // Push it to the channel.
+        push_channel(&ptr->chan_t, msg);
+    }
+    // Reset the buffer position.
+    src->pos = 0;
+    return items;
 }
 
 
@@ -179,29 +208,25 @@ int push_records(MasterBook *ptr, Buffer *src) {
 /// @param ptr the ptr to the master server
 /// @return if we succesfully closed the master server
 int close_master_server(MasterBook *ptr) {
+    // NOTE: You may be wondering, what happens to our file,
+    // well, funny you should ask! It is managed by the background
+    // thread.
     printf("Closing\n");
 
-
-    
-    printf("Waiting..\n");
-    // We force the signal up, closing out the order book.
-    // atomic_store(&ptr->should_die, 1);
-    // set_signal_immediate(&ptr->book_signal, SIGNAL_READY);
-
+    // Send a kill message, which will cause the thread to shut down.
     MbMsg kill;
     kill.tag = 1;
     push_channel(&ptr->chan_t, kill);
 
 
-    printf("bru\n");
-
-    
 
     // Wait for the thread to join.
     if (pthread_join(ptr->handle, NULL) != 0) {
         return -1; // There was an error.
     }
 
+    // Free the channel.
+    destroy_channel(&ptr->chan_t);
 
 
     // Free the memory.

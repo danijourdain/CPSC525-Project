@@ -7,6 +7,8 @@ pub mod backend;
 
 fn main() {
 
+    std::fs::remove_file("database.csv").unwrap();
+
 
     let master = MasterOrderBook::new();
 
