@@ -3,20 +3,8 @@ use std::{ffi::{CStr, CString}, io::ErrorKind};
 
 
 
-#[repr(C)]
-#[derive(Clone)]
-pub struct OrderServer {
-    id: usize,
-    ptr: *const (),
-    master_ptr: *const ()
-}
 
 unsafe extern "C" {
-    pub fn addsilly(
-        i: std::ffi::c_int,
-        c: std::ffi::c_int,
-    ) -> std::ffi::c_int;
-
     fn open_server(
         id: std::ffi::c_int,
         master: *const ()
@@ -30,9 +18,6 @@ unsafe extern "C" {
     fn open_record(
         ptr: *const ()
     ) -> std::ffi::c_int;
-    fn log_last_order(
-        ptr: *const ()
-    );
     fn flush_order(
         ptr: *const ()
     ) -> core::ffi::c_int;
@@ -57,17 +42,39 @@ unsafe extern "C" {
         region: core::ffi::c_int
     ) -> core::ffi::c_int;
     fn try_lock(ptr: *const (), password: *const core::ffi::c_char) -> core::ffi::c_int;
-    fn release_lock(ptr: *const (), val: u32);
-    fn fetch_current_user(ptr: *const ()) -> u32;
+    fn release_lock(ptr: *const ());
 }
 
 
+
+
+
+/// An order server object. This
+/// manages records for a specific region.
+pub struct OrderServer {
+    /// The region ID.
+    id: usize,
+    /// The pointer to the underlying C object.
+    ptr: *const (),
+    /// The pointer to the Master orderbook's C object.
+    master_ptr: *const ()
+}
+
+
+/// A master order book, this manages
+/// the ledger and the database which
+/// are all processed on a background thread.
 pub struct MasterOrderBook {
+    /// The pointer to the underlying C object, this
+    /// is needed to call methods.
     handle: *const (),
+    /// The list of actual order servers available that
+    /// have been intialized.
     servers: Vec<OrderServer>
 }
 
 impl MasterOrderBook {
+    /// Opens a new order book.
     pub fn new() -> Self {
         let ptr = unsafe { open_master_server() };
         if ptr.is_null() {
@@ -78,13 +85,16 @@ impl MasterOrderBook {
             servers: vec![]
         }
     }
-    pub fn open_new_order_book(&mut self, id: i32) {
+    /// Opens a new order server given the region ID.
+    pub fn open_order_server(&mut self, id: i32) {
         let order = OrderServer::open(id, &*self);
         self.servers.push(order);
     }
-    pub fn get_book(&self, id: i32) -> &OrderServer {
-        &self.servers[id as usize]
+    /// Gets the order server for a specific region.
+    pub fn get_region_server(&self, region: i32) -> &OrderServer {
+        &self.servers[region as usize]
     }
+    /// Gets the amount of available regions.
     pub fn available_regions() -> usize {
         return unsafe { query_regions() }.try_into().expect("Returned a negative number of regions.")
     }
@@ -103,6 +113,9 @@ impl Drop for MasterOrderBook {
 }
 
 
+
+/// This is a wrapper for functions that return -1 if 
+/// they have an error, but else are "void"
 fn call_io_based_error_fn<F>(func: F) -> std::io::Result<()>
 where 
     F: FnOnce() -> i32
@@ -117,6 +130,8 @@ where
 
 
 impl OrderServer {
+    /// Opens a new order server given the region ID
+    /// and a reference to the master order book.
     fn open(id: i32, master: &MasterOrderBook) -> Self {
         let ptr = unsafe { open_server(id, master.handle) };
         if ptr.is_null() {
@@ -128,11 +143,13 @@ impl OrderServer {
             master_ptr: master.handle
         }
     }
+    /// Retrieves the name of the order server.
     pub fn get_name(&self) -> &str {
         let ptr = unsafe { get_region_name(self.id as i32) };
         let cstr = unsafe { CStr::from_ptr(ptr) };
         cstr.to_str().expect("Failed to read region name")
     }
+    /// Opens a new record for working.
     pub fn open_record(&self) -> std::io::Result<()> {
 
         let status = unsafe { open_record(self.ptr) };
@@ -144,6 +161,7 @@ impl OrderServer {
 
         Ok(())
     }
+    /// Gets the current balance for the order server.
     pub fn get_balance(&self) -> i32 {
         unsafe { get_balance(self.master_ptr, self.id as i32) }
     }
@@ -182,29 +200,25 @@ impl OrderServer {
     pub fn set_recipient(&self, value: i32) -> std::io::Result<()> {
         call_io_based_error_fn(|| unsafe { set_recipient(self.ptr, value) })
     }
-    pub fn fetch_current_user(&self) -> u32 {
-        unsafe { fetch_current_user(self.ptr) }
-    }
-    pub fn log_last_order(&self) {
-        unsafe { log_last_order(self.ptr) };
-    }
-    pub fn release_lock(&self, id: u32) {
-        unsafe { release_lock(self.ptr, id); }
+    pub fn release_lock(&self) {
+        unsafe { release_lock(self.ptr); }
     }
 }
 
 
 impl Drop for OrderServer {
     fn drop(&mut self) {
-        
+        // We assume that the master order book has
+        // already been shut down or else this may
+        // cause a degree of UB.
         unsafe { close_server(self.ptr) };
     }
 }
 
 // We assume that these are thread safe, which
 // introduces the vulnerability.
-unsafe impl Send for OrderServer {}
-unsafe impl Sync for OrderServer {}
+unsafe impl Send for MasterOrderBook {}
+unsafe impl Sync for MasterOrderBook {}
 
 
 

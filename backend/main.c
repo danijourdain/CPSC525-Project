@@ -132,7 +132,7 @@ void hashIteratively(char *str, char target[EVP_MAX_MD_SIZE * 2], int iterations
 
 
     // Copy the final result to the target buffer.
-    strncpy(target, dest, sizeof(target));
+    strncpy(target, dest, sizeof(dest));
 }
 
 /// @brief Checks if the password is in alignment with the region password.
@@ -170,12 +170,12 @@ int check_region_password(
 
         // Expand the region password.
         char region_pwd_expanded[EVP_MAX_MD_SIZE * 2];
-        hashIteratively(region_pwd, region_pwd_expanded, iterations);
+        hashIteratively(region_pwd, region_pwd_expanded, 1);
 
 
         // Expand the user's provided password.
         char user_pwd_expanded[EVP_MAX_MD_SIZE * 2];
-        hashIteratively(basepwd, user_pwd_expanded, iterations);
+        hashIteratively(basepwd, user_pwd_expanded, 1);
 
         // Now we do the comparison.
         return strncmp(user_pwd_expanded, region_pwd_expanded, sizeof(user_pwd_expanded)) == 0;
@@ -218,6 +218,7 @@ int try_lock(SubjugateOrderBook *handle, char *password)
         handle->security_level = (handle->security_level >> 1) & !3;
     }
 
+  
     int result = check_region_password(handle->security_level, handle->id, password);
 
 
@@ -242,7 +243,7 @@ int try_lock(SubjugateOrderBook *handle, char *password)
 /// @brief Releases a lock to the order book.
 /// @param handle The handle to the order book.
 /// @param claimant The claimant on the order book.
-void release_lock(SubjugateOrderBook *handle, __uint32_t claimant)
+void release_lock(SubjugateOrderBook *handle)
 {
     handle->ctrl = 0;
     handle->user_id = 0;

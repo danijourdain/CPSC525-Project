@@ -307,9 +307,6 @@ char *read_field(char *src, int n) {
 }
 
 int read_out_ledger(int *balances, FILE *fp) {
-    printf("opened a ledger\n");
-
-
 
     int i = 0;
     char line[1024];
@@ -365,15 +362,14 @@ MasterBook *open_master_server() {
     MasterBook *book = (MasterBook *) malloc(sizeof(MasterBook));
 
 
-
+    // Open the ledger.
     int res = load_ledger_file("ledger.csv");
     if(res == -1) {
         perror("could not find the ledger.csv file.\n");
         return NULL;
     }
 
-    printf("opening...\n");
-
+    // Open the ledger as a file pointer.
     FILE *ledger_fd = fdopen(res, "r+");
     if(ledger_fd == NULL) {
         close(res); // Try to close it normally;

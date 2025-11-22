@@ -12,5 +12,5 @@ int set_sender(SubjugateOrderBook *handle, int id);
 int set_money(SubjugateOrderBook *handle, int money);
 void log_last_order(SubjugateOrderBook *handle);
 int flush_order(SubjugateOrderBook *handle);
-void release_lock(SubjugateOrderBook *handle, __uint32_t id);
+void release_lock(SubjugateOrderBook *handle);
 __uint32_t fetch_current_user(SubjugateOrderBook *handle);
