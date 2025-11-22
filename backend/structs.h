@@ -9,6 +9,7 @@ typedef struct order_t {
     int recipient;
     int sender;
     int money;
+    int region;
     /* Is the order writeable */
     int status;
 } Order;
@@ -21,11 +22,15 @@ typedef struct buffer_t {
     int pos;
 } Buffer;
 
+typedef enum {
+    MSG_CLOSE,
+    MSG_ORDER
+} MessageKind;
+
 typedef struct mbmsg_t {
-    int tag;
+    MessageKind tag;
     union {
         Order order;
-        int closure;
     } msg;
 } MbMsg;
 
@@ -49,6 +54,12 @@ typedef struct masterbook_t {
 } MasterBook;
 
 
+typedef enum {
+    SEC_LOW,
+    SEC_MID,
+    SEC_HIGH,
+    SEC_VERYHIGH
+} SecLevel;
 
 
 
@@ -62,14 +73,15 @@ typedef struct server_t {
     Order current_order;
     /// @brief The buffer of the current front-end state of the order book.
     Buffer current;
+    SecLevel security_level;
 
-    struct signal_t signal;
+    // struct signal_t signal;
     /// @brief The buffer for the background writer.
     Buffer background;
     /// @brief The handle to the worker thread.
     pthread_t worker_thread;
     
     MasterBook *master;
-} ServerT;
+} SubjugateOrderBook;
 
 #endif

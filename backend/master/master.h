@@ -3,12 +3,15 @@
 
 #include "../structs.h"
 
+#define REGIONS 3
+
 
 MasterBook *open_master_server();
 int close_master_server(MasterBook *ptr);
 int push_records(MasterBook *ptr, Buffer *src);
 int query_regions();
 char *get_region_name(int id);
+char *get_region_password(int id);
 
 
 #endif

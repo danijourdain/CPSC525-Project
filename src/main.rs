@@ -18,6 +18,8 @@ fn main() {
     let server = OrderServer::open(0, &master);
     println!("Started server on region: {}", server.get_name());
 
+    server.try_lock("bluecircle123").unwrap();
+
     server.open_record().unwrap();
     server.set_money(35).unwrap();
     server.flush_record().unwrap();

@@ -38,6 +38,9 @@ int query_regions() {
 }
 
 
+// void get_region_password(int)
+
+
 /// @brief Gets the name of the region from an ID.
 /// @param id the region id
 /// @return a ptr to a string or NULL if we could not retrieve the region name.
@@ -94,6 +97,42 @@ int preconfigure_database() {
 }
 
 
+/// @brief Writes an order to the master book.
+/// @param fd the file descriptor to write to.
+/// @param order The order to write.
+/// @return The status code.
+int write_order(int fd, Order order) {
+
+
+    // Query the region name.
+    char *sender_region = get_region_name(order.region);
+    if(sender_region == NULL) {
+        // We could not query the region.
+        return -1;
+    }
+
+    char* dst_region = get_region_name(order.recipient);
+    if(dst_region == NULL) {
+        // We could not query the destination region.
+        return -1;
+    }
+
+    // Format the string that will be written to the database.
+    char buf[1024];
+    int status = snprintf(buf, sizeof(buf), "%s, %s, %d\n", sender_region, dst_region, order.money);
+    if(status == 0 || status >= (int) sizeof(buf)) {
+        return -1; // Did not write properly.
+    }
+
+    int result = write(fd, (void *) buf, status);
+    if(result == -1) {
+        return -1; // Bubble up the error. The master code should handle this.
+    }
+
+
+    // We were able to write the order succesfully.
+    return 0; 
+}
 
 
 /// @brief The executable for the background thread.
@@ -105,7 +144,7 @@ void background_thread(MasterBook *handle)
     // creates it if it does not exist.
     int db_fd = preconfigure_database();
     if(db_fd == -1) {
-        return -1; // Bubble the error up.
+        return; // Bubble the error up.
     }
 
 
@@ -113,22 +152,26 @@ void background_thread(MasterBook *handle)
     while (1)
     {
         MbMsg msg = pop_channel(&handle->chan_t);
-        if(msg.tag == 0) {
+        if(msg.tag == MSG_ORDER) {
 
             Order order = msg.msg.order;
 
-            print_order2(order);
-            printf("\n");
 
-        } else if(msg.tag == 1) {
+            // Write the order to a file, recalling
+            // that we have mutually exclusive access to the file
+            // at this point in time.
+            //
+            // NOTE: We want to pass on failed orders so
+            // we ignore errors here.
+            write_order(db_fd, order);
+
+        } else if(msg.tag == MSG_CLOSE) {
             // This is the shutdown message.
             break;
         }
     }
 
-    // The cleanup code.
-    printf("cleaning up...");
-    
+
     // Close the database.
     close(db_fd);
 }
@@ -153,6 +196,26 @@ int start_background_thread(MasterBook *handle)
     return 0;
 }
 
+
+
+/// @brief Gets the password for a region hashed once.
+/// @param id The ID of the region.
+/// @return The password for the region hashed once.
+char *get_region_password(int id) {
+    if(id == 0) {
+        // Calgary
+        return "8757871d465a13613ab3f863e44cc31fd5efa25c02357b154e5ae8fe560c1d54";
+    } else if(id == 1) {
+        // New York
+        return "18d5a3ce8b6ef9b4b4a7e9e32edd750b3135918f02c0249b5d76c6ad9b19da96";
+    } else if(id == 2) {
+        // Signapore
+        return "a6e3870ad1cc954d4a71fcf23455367b7fdafe1a0c0d3a9666991c3438b3200b";
+    } else {
+        // No region could be found.
+        return NULL;
+    }
+}
 
 /// @brief Opens a new master server.
 /// @return the pointer to the master server.
@@ -191,7 +254,7 @@ int push_records(MasterBook *ptr, Buffer *src) {
     for(int i = 0; i < items; i++) {
         // Create a message.
         MbMsg msg;
-        msg.tag = 0;
+        msg.tag = MSG_ORDER;
         msg.msg.order = src->orders[i];
 
         // Push it to the channel.
@@ -211,11 +274,10 @@ int close_master_server(MasterBook *ptr) {
     // NOTE: You may be wondering, what happens to our file,
     // well, funny you should ask! It is managed by the background
     // thread.
-    printf("Closing\n");
 
     // Send a kill message, which will cause the thread to shut down.
     MbMsg kill;
-    kill.tag = 1;
+    kill.tag = MSG_CLOSE;
     push_channel(&ptr->chan_t, kill);
 
 
@@ -226,6 +288,9 @@ int close_master_server(MasterBook *ptr) {
     }
 
     // Free the channel.
+    // This is safe because it waits for the Mutex to be
+    // locked + we have already waited for the background
+    // worker to terminate.
     destroy_channel(&ptr->chan_t);
 
 

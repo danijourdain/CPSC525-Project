@@ -7,7 +7,6 @@
 /// @param ptr
 void init_buffer(Buffer *ptr);
 
-int transfer_buffers(Buffer *src, Buffer *dst);
 
 /// @brief
 /// @param ptr

@@ -1,5 +1,5 @@
 use core::panic;
-use std::{ffi::CStr, io::ErrorKind};
+use std::{ffi::{CStr, CString}, io::ErrorKind};
 
 
 
@@ -51,7 +51,7 @@ unsafe extern "C" {
         ptr: *const (),
         id: core::ffi::c_int
     ) -> core::ffi::c_int;
-    fn try_lock(ptr: *const (), val: u32) -> core::ffi::c_int;
+    fn try_lock(ptr: *const (), password: *const core::ffi::c_char) -> core::ffi::c_int;
     fn release_lock(ptr: *const (), val: u32);
     fn fetch_current_user(ptr: *const ()) -> u32;
 }
@@ -117,8 +117,11 @@ impl OrderServer {
 
         Ok(())
     }
-    pub fn try_lock(&self, claimant: u32) -> std::io::Result<()> {
-        let claim = unsafe { try_lock(self.ptr, claimant) };
+    pub fn try_lock(&self, password: &str) -> std::io::Result<()> {
+
+        let cstr = CString::new(password)?;
+        
+        let claim = unsafe { try_lock(self.ptr, cstr.as_c_str().as_ptr()) };
         if claim != 1 {
             return Err(std::io::Error::last_os_error());
         } else {
