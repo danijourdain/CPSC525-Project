@@ -15,6 +15,7 @@
 #include "master/master.h"
 #include <openssl/evp.h>
 #include <sched.h>
+#include <error.h>
 // BUFFER
 
 
@@ -52,9 +53,9 @@ SubjugateOrderBook *open_server(int id, MasterBook *master)
 
 
 
-/// @brief How many iterations of hashing should be used to check the passwords.
-/// @param level The 
-/// @return 
+/// @brief Gets the necessary amount of iterations depending on the security level.
+/// @param level The security level.
+/// @return The number of iterations.
 int iterations_for_level(SecLevel level) {
     if(level == SEC_LOW) {
         return 1;
@@ -81,13 +82,13 @@ int check_locked(SubjugateOrderBook *handle)
 
 
 
-/// @brief This was taken from A3
-/// @param str 
-/// @return 
-static const char * hashString(const char * str, char *resbuf)
+/// @brief Hashes a string into the target buffer. This was modified from A3.
+/// @param str The source string to hash.
+/// @param resbuf Where the source string will be put.
+void hashString(const char * str, char *resbuf)
 {
     EVP_MD_CTX * context = EVP_MD_CTX_create();
-    if (! context) error(-1, 0, "failed EVP_MD_CTX_create");
+    if (! context) error(-1, 1, "failed EVP_MD_CTX_create");
     if (! EVP_DigestInit_ex(context, EVP_sha256(), NULL))
         error(-1, 0, "failed EVP_DigestInit_ex");
     if (! EVP_DigestUpdate(context, str, strlen(str)))
@@ -100,7 +101,6 @@ static const char * hashString(const char * str, char *resbuf)
         sprintf(resbuf + i * 2, "%02x", hashBuff[i]);
     }
     EVP_MD_CTX_destroy(context);
-    return resbuf;
 }
 
 
@@ -132,7 +132,7 @@ void hashIteratively(char *str, char target[EVP_MAX_MD_SIZE * 2], int iterations
 
 
     // Copy the final result to the target buffer.
-    strncpy(target, dest, sizeof(dest));
+    strncpy(target, dest, sizeof(target));
 }
 
 /// @brief Checks if the password is in alignment with the region password.
@@ -187,9 +187,12 @@ int check_region_password(
 
 
 
+/// @brief Tries locking the orderbook. This is necessary for opening records and the like.
+/// @param handle The handle to the order book.
+/// @param password The password to this region that will be used to authenticate.
+/// @return If we were able to lock or not.
 int try_lock(SubjugateOrderBook *handle, char *password)
 {
-    
     // Increase the request count.
     handle->req_count += 1;
 
@@ -233,16 +236,16 @@ int try_lock(SubjugateOrderBook *handle, char *password)
     // We are done and grant access
     handle->ctrl = 2;
 
-
     return 1;
 }
 
+/// @brief Releases a lock to the order book.
+/// @param handle The handle to the order book.
+/// @param claimant The claimant on the order book.
 void release_lock(SubjugateOrderBook *handle, __uint32_t claimant)
 {
-    
-        handle->ctrl = 0;
-        handle->user_id = 0;
-    
+    handle->ctrl = 0;
+    handle->user_id = 0;
 }
 
 /// @brief Fetches the current user using the database.
@@ -253,6 +256,10 @@ __uint32_t fetch_current_user(SubjugateOrderBook *handle)
     return handle->user_id;
 }
 
+
+/// @brief Opens a new record.
+/// @param handle The handle to the orderbook.
+/// @return If we were able to succesfully open a new record.
 int open_record(SubjugateOrderBook *handle)
 {
 
@@ -271,7 +278,10 @@ int open_record(SubjugateOrderBook *handle)
 }
 
 
-
+/// @brief Sets the recipient on the order that is currently being done.
+/// @param handle The handle to the orderbook.
+/// @param id The id of the recipient.
+/// @return Returns true or false if it was able to process the request.
 int set_recipient(SubjugateOrderBook *handle, int id)
 {
     if (handle->current_order.status != 1)
@@ -285,6 +295,11 @@ int set_recipient(SubjugateOrderBook *handle, int id)
     return 1;
 }
 
+
+/// @brief Sets the sender on the order that is currently being done.
+/// @param handle The handle to the orderbook.
+/// @param id The id of the sender.
+/// @return Returns true or false if it was able to process the request.
 int set_sender(SubjugateOrderBook *handle, int id)
 {
     if (handle->current_order.status != 1)
@@ -298,7 +313,12 @@ int set_sender(SubjugateOrderBook *handle, int id)
     return 1;
 }
 
-int set_money(SubjugateOrderBook *handle, int id)
+
+/// @brief Sets the money on the order that is currently being done.
+/// @param handle The handle to the orderbook.
+/// @param value The value of the money.
+/// @return Returns true or false if it was able to process the request.
+int set_money(SubjugateOrderBook *handle, int value)
 {
     if (handle->current_order.status != 1)
     {
@@ -306,36 +326,15 @@ int set_money(SubjugateOrderBook *handle, int id)
     }
 
     // Set the current record's sender.
-    handle->current_order.money = id;
+    handle->current_order.money = value;
 
     return 1;
 }
 
 
-
-
-
-void print_order(Order ptr)
-{
-    printf("Order { sender: %d, recipient: %d, money: %d }", ptr.sender, ptr.recipient, ptr.money);
-}
-
-void print_buffer(Buffer *src)
-{
-    printf("Buffer { pos: %d, buffer: [", src->pos);
-
-    for (int i = 0; i < src->pos; i++)
-    {
-        print_order(src->orders[i]);
-        if (i != src->pos - 1)
-        {
-            printf(", ");
-        }
-    }
-
-    printf("]}\n");
-}
-
+/// @brief Flushes the order to the orderbook.
+/// @param handle The handle to the subjugate order book.
+/// @return The main order book.
 int flush_order(SubjugateOrderBook *handle)
 {
     if (buffer_full(&handle->current))

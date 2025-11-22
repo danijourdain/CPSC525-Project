@@ -4,6 +4,9 @@
 #include <pthread.h>
 #include <linux/futex.h>  /* Definition of FUTEX_* constants */
 #include "signals/signal.h"
+#include <stdio.h>
+
+#define REGIONS 3
 
 typedef struct order_t {
     int recipient;
@@ -51,7 +54,9 @@ typedef struct masterbook_t {
     Buffer working;
     Signal book_signal;
     Channel chan_t;
+    FILE *ledger_fd;
     pthread_t handle;
+    int balances[REGIONS];
     _Atomic(int) should_die;
 } MasterBook;
 

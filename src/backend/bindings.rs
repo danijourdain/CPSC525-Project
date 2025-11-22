@@ -51,6 +51,14 @@ unsafe extern "C" {
         ptr: *const (),
         id: core::ffi::c_int
     ) -> core::ffi::c_int;
+    fn set_sender(
+        ptr: *const (),
+        id: core::ffi::c_int
+    ) -> core::ffi::c_int;
+    fn set_recipient(
+        ptr: *const (),
+        id: core::ffi::c_int
+    ) -> core::ffi::c_int;
     fn try_lock(ptr: *const (), password: *const core::ffi::c_char) -> core::ffi::c_int;
     fn release_lock(ptr: *const (), val: u32);
     fn fetch_current_user(ptr: *const ()) -> u32;
@@ -63,8 +71,12 @@ pub struct MasterOrderBook {
 
 impl MasterOrderBook {
     pub fn new() -> Self {
+        let ptr = unsafe { open_master_server() };
+        if ptr.is_null() {
+            panic!("failed to initialize the master order book!");
+        }
         Self {
-            handle: unsafe { open_master_server() }
+            handle: ptr
         }
     }
     pub fn available_regions() -> usize {
@@ -77,6 +89,19 @@ impl Drop for MasterOrderBook {
         // Here we will ignore the errors since we are closing
         // it anyways.
         unsafe { close_master_server(self.handle) };
+    }
+}
+
+
+fn call_io_based_error_fn<F>(func: F) -> std::io::Result<()>
+where 
+    F: FnOnce() -> i32
+{
+    let claim =  func();
+    if claim == -1 {
+        return Err(std::io::Error::last_os_error());
+    } else {
+        return Ok(());
     }
 }
 
@@ -136,6 +161,12 @@ impl OrderServer {
         }
 
         Ok(())
+    }
+    pub fn set_sender(&self, value: i32) -> std::io::Result<()> {
+        call_io_based_error_fn(|| unsafe { set_sender(self.ptr, value) })
+    }
+    pub fn set_recipient(&self, value: i32) -> std::io::Result<()> {
+        call_io_based_error_fn(|| unsafe { set_recipient(self.ptr, value) })
     }
     pub fn fetch_current_user(&self) -> u32 {
         unsafe { fetch_current_user(self.ptr) }

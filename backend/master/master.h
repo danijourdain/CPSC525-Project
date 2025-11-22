@@ -3,7 +3,6 @@
 
 #include "../structs.h"
 
-#define REGIONS 3
 
 
 MasterBook *open_master_server();

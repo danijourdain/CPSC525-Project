@@ -8,8 +8,10 @@
 #include "../helper/helper.h"
 #include <sys/stat.h>
 #include "../channel/channel.h"
-
-
+#include <error.h>
+#include <errno.h>
+#include <limits.h>
+#include <inttypes.h>
 
 
 /// @brief Queries how many regions the master supports.
@@ -35,6 +37,32 @@ char *get_region_name(int id) {
 }
 
 
+
+
+/// @brief Loads the ledger file from a name.
+/// @param name The name of the ledger file.
+/// @return The file descriptor.
+int load_ledger_file(char *name) {
+    struct stat buffer;
+
+
+    int did_exist = 0;
+    // Let us first check if the database exists (i.e., do we need to write
+    // the header file)
+    if(stat(name, &buffer) != 0) {
+        return -1; // Ledger did not exist.
+    }
+
+
+    // Create the database on disk.
+    int fd = open(name, O_RDWR, 0644);
+    if(fd == -1) {
+        return -1; // failed to open the database.
+    }
+
+    
+    return fd;
+}
 /// @brief Configures the database, writing the header if necessary.
 /// @return The file descriptor of the database.
 int preconfigure_database() {
@@ -113,6 +141,42 @@ int write_order(int fd, Order order) {
 }
 
 
+
+/// @brief Writes back to the ledger.
+/// @param handle The pointer to the master book.
+/// @return the status
+int ledger_writeback(MasterBook *handle) {
+    fflush(handle->ledger_fd);
+    // Truncate the file.
+    int res = ftruncate(fileno(handle->ledger_fd), 0);
+    if(res == -1) {
+        perror("failed to truncate the file.");
+        return -1;
+    }
+
+    fseek(handle->ledger_fd, 0, 0);
+
+    // Write the header to the file.
+    char *header = "region,balance\n";
+    if(fwrite(header, sizeof(char), 15, handle->ledger_fd) == 0) {
+        perror("failed to write header.");
+        return -1;
+    }
+
+    // Now write the CSV rows.
+    for(int i = 0; i < REGIONS; i++) {
+        if(fprintf(handle->ledger_fd, "%d,%d\n", i, handle->balances[i]) == 0) {
+            perror("failed to write...,");
+            return -1;
+        }
+    }
+
+
+    // Flush the file contents.
+    fflush(handle->ledger_fd);
+}
+
+
 /// @brief The executable for the background thread.
 /// @param handle The handle to the master order book.
 void background_thread(MasterBook *handle)
@@ -125,8 +189,6 @@ void background_thread(MasterBook *handle)
         return; // Bubble the error up.
     }
 
-
-
     while (1)
     {
         MbMsg msg = pop_channel(&handle->chan_t);
@@ -135,6 +197,12 @@ void background_thread(MasterBook *handle)
             Order order = msg.msg.order;
 
 
+            if(order.money > handle->balances[order.sender]) {
+                continue;
+            }
+
+            
+
             // Write the order to a file, recalling
             // that we have mutually exclusive access to the file
             // at this point in time.
@@ -142,6 +210,14 @@ void background_thread(MasterBook *handle)
             // NOTE: We want to pass on failed orders so
             // we ignore errors here.
             write_order(db_fd, order);
+
+
+      
+            // Perform the money transfer.
+            handle->balances[order.sender] -= order.money;
+            handle->balances[order.recipient] += order.money;
+
+            ledger_writeback(handle);
 
         } else if(msg.tag == MSG_CLOSE) {
             // This is the shutdown message.
@@ -195,11 +271,120 @@ char *get_region_password(int id) {
     }
 }
 
+
+/// @brief Reads a field from a CSV row. Inspired by https://stackoverflow.com/questions/12911299/read-csv-file-in-c.
+/// @param src The source line.
+/// @param n The field to access.
+/// @return The text.
+char *read_field(char *src, int n) {
+    const char* tok;
+    for (tok = strtok(src, ",");
+            tok && *tok;
+            tok = strtok(NULL, ",\n"))
+    {
+        if (!--n)
+            return tok;
+    }
+    return NULL;
+}
+
+int read_out_ledger(int *balances, FILE *fp) {
+    printf("opened a ledger\n");
+
+
+
+    int i = 0;
+    char line[1024];
+    while(fgets(line, sizeof(line), fp)) {
+        
+        if(i == 0 && strncmp("region,balance\n", line, sizeof(line)) != 0) {
+            // Make sure that the first line is properly formatted.
+            return -1;
+        } else if(i > 0) {
+            // Extract the CSV lines.
+            char *region_balance_str = read_field(line, 2);
+            char *region_id_str = read_field(line, 1);
+            if(region_id_str == NULL || region_balance_str == NULL) {
+                return -1; // One of the pointers is NULL.
+            }
+
+            // Parse the line.
+            // The following was helpful: https://stackoverflow.com/questions/7021725/how-to-convert-a-string-to-integer-in-c
+            uintmax_t num = strtoumax(region_id_str, NULL, 10);
+            if (num == UINTMAX_MAX && errno == ERANGE) {
+                return -1; 
+            }
+
+            if(num >= REGIONS) {
+                return -1; // Not a valid region ID.
+            }
+
+
+            uintmax_t balance = strtoumax(region_balance_str, NULL, 10);
+            if(balance == UINTMAX_MAX && errno == ERANGE) {
+                return -1; // Failed to parse.
+            }
+
+            balances[num] = (int) balance;
+
+
+
+        }
+
+       
+
+        // Increment the control.
+        i += 1;
+    }
+    return 0;
+
+}
+
+
 /// @brief Opens a new master server.
 /// @return the pointer to the master server.
 MasterBook *open_master_server() {
     MasterBook *book = (MasterBook *) malloc(sizeof(MasterBook));
 
+
+
+    int res = load_ledger_file("ledger.csv");
+    if(res == -1) {
+        perror("could not find the ledger.csv file.\n");
+        return NULL;
+    }
+
+    printf("opening...\n");
+
+    FILE *ledger_fd = fdopen(res, "r+");
+    if(ledger_fd == NULL) {
+        close(res); // Try to close it normally;
+        return NULL;
+    }
+
+
+    // Read out the ledger.
+    if(read_out_ledger(book->balances, ledger_fd) == -1) {
+        perror("ledger was malformed.\n");
+        close(res); // Close out the ledger file.
+        return NULL;
+    }
+
+
+    // Set the ledger file descriptor.
+    book->ledger_fd = ledger_fd;
+   
+       
+
+    // log the balances.
+    printf("log: balances read (");
+    for(int i = 0; i < REGIONS; i++) {
+        printf("%s: %d", get_region_name(i), book->balances[i]);
+        if(i != REGIONS - 1) {
+            printf(", ");
+        }
+    }
+    printf(")\n");
 
     // The channel.
     init_channel(&book->chan_t);
@@ -270,6 +455,10 @@ int close_master_server(MasterBook *ptr) {
     // locked + we have already waited for the background
     // worker to terminate.
     destroy_channel(&ptr->chan_t);
+
+
+    // Finally we free up the ledger.
+    fclose(ptr->ledger_fd);
 
 
     // Free the memory.

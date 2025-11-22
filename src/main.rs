@@ -7,7 +7,7 @@ pub mod backend;
 
 fn main() {
 
-    std::fs::remove_file("database.csv").unwrap();
+    // std::fs::remove_file("database.csv").unwrap();
 
 
     // let master = MasterOrderBook::new();
@@ -38,6 +38,15 @@ fn main() {
 
     let barrier = Barrier::new(2);
 
+    server.open_record().unwrap();
+    server.set_sender(0).unwrap();
+    server.set_recipient(1).unwrap();
+    server.set_money(35).unwrap();
+    server.flush_record().unwrap();
+
+
+    if false {
+        
 
     const THRESH: usize = 1;
 
@@ -76,9 +85,6 @@ fn main() {
        
                 // server.release_lock(32);
             }
-       
-            
-
         });
 
         s.spawn(|| {
@@ -132,6 +138,7 @@ fn main() {
 
 
     });
+    }
     // server.log_last_order();
 
     // server.log_last_order();
