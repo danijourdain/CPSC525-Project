@@ -226,7 +226,6 @@ int load_database(char *name, MasterBook *book) {
     // Close the file descriptor.
     fclose(fd);
 
-    printf("Final Length: %d\n", list->length);
     // We return with no errors.
     return 0;
 }
@@ -268,13 +267,13 @@ int preconfigure_database(MasterBook *book) {
 
 
     if(did_exist) {
-        printf("Database existed. Loading records.\n");
+        printf("log: database already exists. loading records.\n");
         if(load_database(name, book) == -1) {
             // free((void *) orderListlist);
             return -1; // Bubble up the error.
         }
 
-        printf("Loaded database. (%d)\n", book->order_list.length);
+        printf("log: loaded database. (%d)\n", book->order_list.length);
     }
 
 

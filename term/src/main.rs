@@ -14,7 +14,7 @@ use ratatui::{
 };
 
 use crate::{
-    backend::worker::{FromWorkerMsg, ToWorkerMessageContents, read_orders, try_login, worker_thread},
+    backend::worker::{FromWorkerMsg, ToWorkerMsg, read_orders, try_login, worker_thread},
     gui::{
         account::Account, formbutton::FormButton, ledger::Ledger, login::Login, waiting::Waiting,
     },
@@ -62,7 +62,7 @@ pub struct App {
     highlighted: AppElement,
     selected: Option<AppElement>,
 
-    to_worker_channel: Sender<ToWorkerMessageContents>,
+    to_worker_channel: Sender<ToWorkerMsg>,
     from_worker_channel: Receiver<FromWorkerMsg>,
 }
 
@@ -211,7 +211,7 @@ impl App {
 
         if self.selected == Some(AppElement::Submit) {
             self.selected = None;
-            let _ = self.to_worker_channel.send(ToWorkerMessageContents::Trade { sender: 0, receiver: self.receiver_button.get_position().unwrap(), money: self.money_button.get_money().unwrap() });
+            let _ = self.to_worker_channel.send(ToWorkerMsg::Trade { sender: 0, receiver: self.receiver_button.get_position().unwrap(), money: self.money_button.get_money().unwrap() });
         }
 
         // self.account.set_focused(true);

@@ -2,7 +2,7 @@ from client import Client
 
 
 if __name__ == "__main__":
-    
+    print("Running the attack script...")
     while True:
         client = Client(
             region=0,
@@ -11,7 +11,6 @@ if __name__ == "__main__":
         )
         
         if client.connect():
+            client.transact_direct(1, 38)
             print("ACCESSED!")
             break
-        # break
-        # print(client.get_balance())

@@ -11,7 +11,7 @@ use ratatui::{
     widgets::{Block, Padding, Paragraph},
 };
 
-use crate::backend::worker::ToWorkerMessageContents;
+use crate::backend::worker::ToWorkerMsg;
 
 #[derive(Default, Debug)]
 pub struct Login {
@@ -21,7 +21,7 @@ pub struct Login {
 }
 
 impl Login {
-    pub fn handle_key_event(&mut self, event: KeyEvent, channel: &mut Sender<ToWorkerMessageContents>) {
+    pub fn handle_key_event(&mut self, event: KeyEvent, channel: &mut Sender<ToWorkerMsg>) {
         if !self.locked {
              if event.code == KeyCode::Backspace {
             self.password.pop();
@@ -30,7 +30,7 @@ impl Login {
             self.password.push(c);
         }
         if event.code == KeyCode::Enter {
-            let _ = channel.send(ToWorkerMessageContents::LoginAttempt(self.password.clone().into_iter().collect::<String>()));
+            let _ = channel.send(ToWorkerMsg::LoginAttempt(self.password.clone().into_iter().collect::<String>()));
             self.locked = true;
         }
         }

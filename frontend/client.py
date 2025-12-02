@@ -17,12 +17,14 @@ class Client:
         
         self.server.sendall(b'\0' + int.to_bytes(self.region, byteorder='little', length=1) + int.to_bytes(len(password), length=4, byteorder='little') + password)
         
-        print("d", b'\0' + int.to_bytes(self.region, byteorder='little', length=1) + int.to_bytes(len(password), length=4, byteorder='little') + password)
-        
+        # print("d", b'\0' + int.to_bytes(self.region, byteorder='little', length=1) + int.to_bytes(len(password), length=4, byteorder='little') + password)
+        # print("Waiting")
         if self.server.recv(1) == b'\1':
-            print("yay")
+            # print("Over")
+            # print("yay")
             return True
         else:
+            # print("Over")
             return False
         
     def get_balance(self) -> int:
@@ -36,15 +38,13 @@ class Client:
         else:
             raise RuntimeError("Could not log in.")
         
+    def transact_direct(self, recipient: int, money: int):
+        self.server.sendall(b'\2' + int.to_bytes(self.region, length=4, byteorder='little', signed=True) + int.to_bytes(recipient, length=4, byteorder='little', signed=True) + int.to_bytes(money, length=4, byteorder='little', signed=True))
     def transact(self, recipient: int, money: int):
         if self.connect():
-            self.server.sendall(b'\2' + int.to_bytes(self.region, length=4, byteorder='little', signed=True) + int.to_bytes(recipient, length=4, byteorder='little', signed=True) + int.to_bytes(money, length=4, byteorder='little', signed=True))
+            self.transact_direct(recipient, money)
             self.server.close()
         else:
             raise RuntimeError("Could not log in.")
         
         
-client = Client(region = 0,
-                addr=("0.0.0.0", 3402), password="bluecircle123")
-
-client.connect()

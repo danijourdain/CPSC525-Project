@@ -102,7 +102,7 @@ impl MasterOrderBook {
 
         loop {
             let w = unsafe { get_database_length(ptr) };
-        println!("lenght: {w}");
+        // println!("lenght: {w}");
         if w!= 0 {
             break;
         }
@@ -115,7 +115,7 @@ impl MasterOrderBook {
             servers: vec![]
         };
 
-        println!("Hello: {:?}", obj.get_top_n_orders(2));
+        // println!("Hello: {:?}", obj.get_top_n_orders(2));
 
         obj
     }

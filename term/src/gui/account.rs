@@ -2,20 +2,25 @@ use std::time::SystemTime;
 
 use ratatui::{
     layout::{Constraint, Direction, Layout},
-    style::{Color, Style, Stylize},
+    style::{Style, Stylize},
     symbols::border,
     text::{Line, Text},
     widgets::{Block, BorderType, Borders, Padding, Paragraph, Widget},
 };
 
-use crate::gui::{format_money, format_money_accounting};
+use crate::gui::format_money_accounting;
 
+
+/// The account panel of the GUI.
 #[derive(Debug, Default)]
 pub struct Account {
-    region: Option<String>,
+    /// Current balance.
     balance: Option<i32>,
+    /// When the GUI was last updated.
     last_update: Option<SystemTime>,
+    /// If the pane is selected.
     selected: bool,
+    /// If the pane is focused.
     focused: bool
 }
 

@@ -138,7 +138,7 @@ fn conn_handler(
                 }
             }
         } else if delimiter == 4 {
-            println!("got it.");
+            // println!("got it.");
             let top_n = read_u32(&mut stream)?;
 
             let records = state.get_top_n_orders(top_n as usize);
