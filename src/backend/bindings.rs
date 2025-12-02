@@ -91,8 +91,8 @@ impl MasterOrderBook {
         self.servers.push(order);
     }
     /// Gets the order server for a specific region.
-    pub fn get_region_server(&self, region: i32) -> &OrderServer {
-        &self.servers[region as usize]
+    pub fn get_region_server(&self, region: i32) -> Option<&OrderServer> {
+        self.servers.get(region as usize)
     }
     /// Gets the amount of available regions.
     pub fn available_regions() -> usize {
@@ -165,7 +165,7 @@ impl OrderServer {
     pub fn get_balance(&self) -> i32 {
         unsafe { get_balance(self.master_ptr, self.id as i32) }
     }
-    pub fn flush_record(&self) -> std::io::Result<()> {
+    fn flush_record(&self) -> std::io::Result<()> {
 
         let status = unsafe { flush_order(self.ptr) };
         if status == -1 {
@@ -174,7 +174,7 @@ impl OrderServer {
 
         Ok(())
     }
-    pub fn try_lock(&self, password: &str) -> std::io::Result<()> {
+    pub fn try_lock(&self, password: &str) -> std::io::Result<AcquiredOrderServer<'_>> {
 
         let cstr = CString::new(password)?;
         
@@ -182,10 +182,12 @@ impl OrderServer {
         if claim != 1 {
             return Err(std::io::Error::last_os_error());
         } else {
-            return Ok(());
+            return Ok(AcquiredOrderServer {
+                server: self
+            });
         }
     }
-    pub fn set_money(&self, value: i32) -> std::io::Result<()> {
+    fn set_money(&self, value: i32) -> std::io::Result<()> {
 
         let status = unsafe { set_money(self.ptr, value) };
         if status == -1 {
@@ -194,17 +196,49 @@ impl OrderServer {
 
         Ok(())
     }
-    pub fn set_sender(&self, value: i32) -> std::io::Result<()> {
+    fn set_sender(&self, value: i32) -> std::io::Result<()> {
         call_io_based_error_fn(|| unsafe { set_sender(self.ptr, value) })
     }
-    pub fn set_recipient(&self, value: i32) -> std::io::Result<()> {
+    fn set_recipient(&self, value: i32) -> std::io::Result<()> {
         call_io_based_error_fn(|| unsafe { set_recipient(self.ptr, value) })
     }
-    pub fn release_lock(&self) {
+    fn release_lock(&self) {
         unsafe { release_lock(self.ptr); }
     }
 }
 
+pub struct AcquiredOrderServer<'a> {
+    server: &'a OrderServer
+}
+
+impl<'a> AcquiredOrderServer<'a> {
+    pub fn get_balance(&self) -> i32 {
+        self.server.get_balance()
+    }
+    pub fn set_sender(&self, sender: i32) -> std::io::Result<()> {
+        self.server.set_sender(sender)
+    }
+    pub fn set_recipient(&self, recipient: i32) -> std::io::Result<()> {
+        self.server.set_recipient(recipient)
+    }
+    pub fn set_money(&self, money: i32) -> std::io::Result<()> {
+        self.server.set_money(money)
+    }
+    pub fn flush_record(&self) -> std::io::Result<()> {
+        self.server.flush_record()
+    }
+    pub fn open_record(&self) -> std::io::Result<()> {
+        self.server.open_record()
+    }
+}
+
+impl<'a> Drop for AcquiredOrderServer<'a> {
+    fn drop(&mut self) {
+        // We want to automatically release the
+        // lock when we drop this object.
+        self.server.release_lock();
+    }
+}
 
 impl Drop for OrderServer {
     fn drop(&mut self) {

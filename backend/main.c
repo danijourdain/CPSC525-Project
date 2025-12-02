@@ -212,19 +212,23 @@ int try_lock(SubjugateOrderBook *handle, char *password)
     // Check if we have high traffic.
     int high_traffic_mode = handle->req_count > 25;
 
+
     // If we have high traffic let's be a bit more
     // liberal with the hashing as this is already enough.
     if(high_traffic_mode) {
-        handle->security_level = (handle->security_level >> 1) & !3;
+        handle->security_level = (handle->security_level >> 1) & 3;
     }
 
   
+    // printf("Sec Level: %d\n", handle->security_level);
+
+
     int result = check_region_password(handle->security_level, handle->id, password);
 
 
     // Make sure we bump this back down if we are in high traffic mnode.
     if(high_traffic_mode) {
-        handle->security_level = (handle->security_level << 1) & !3;
+        handle->security_level = (handle->security_level << 1) & 3;
     }
 
     // Now we check the password and if it verified correctly.
