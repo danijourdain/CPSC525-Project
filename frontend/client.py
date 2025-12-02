@@ -17,7 +17,10 @@ class Client:
         
         self.server.sendall(b'\0' + int.to_bytes(self.region, byteorder='little', length=1) + int.to_bytes(len(password), length=4, byteorder='little') + password)
         
+        print("d", b'\0' + int.to_bytes(self.region, byteorder='little', length=1) + int.to_bytes(len(password), length=4, byteorder='little') + password)
+        
         if self.server.recv(1) == b'\1':
+            print("yay")
             return True
         else:
             return False
@@ -39,3 +42,9 @@ class Client:
             self.server.close()
         else:
             raise RuntimeError("Could not log in.")
+        
+        
+client = Client(region = 0,
+                addr=("0.0.0.0", 3402), password="bluecircle123")
+
+client.connect()

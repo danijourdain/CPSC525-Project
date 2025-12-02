@@ -1,22 +1,37 @@
-use std::{fmt::format, time::SystemTime};
 
 use chrono::Utc;
 use ratatui::{
-    Frame, buffer::Buffer, layout::{Constraint, Direction, Layout}, style::{Color, Modifier, Style, Stylize}, symbols::border, text::{Line, Span, Text, ToLine, ToSpan}, widgets::{Block, BorderType, Borders, Cell, Padding, Paragraph, Row, Table, Widget}
+    buffer::Buffer, layout::{Constraint, Direction, Layout}, style::{Color, Modifier, Style, Stylize}, text::ToLine, widgets::{Block, BorderType, Borders, Cell, Padding, Paragraph, Row, Table, Widget}
 };
 
-use crate::gui::{format_money, format_money_accounting};
+use crate::gui::format_money_accounting;
 
 // #[derive(Debug)]
 pub struct Ledger {
-    trades: Vec<Trade>
+    trades: Vec<Trade>,
+    selected: bool,
+    focused: bool
+
 }
 
 impl Ledger {
     pub fn new() -> Self {
         Self {
-            trades: vec![]
+            trades: vec![],
+            selected: false,
+            focused: false
         }
+    }
+
+    pub fn set_selected(&mut self, select: bool) {
+        self.selected = select;
+    }
+    pub fn set_focused(&mut self, highlight: bool) {
+        self.focused = highlight;
+    }
+    pub fn reset(&mut self) {
+        self.set_focused(false);
+        self.set_selected(false);
     }
 }
 
@@ -27,6 +42,13 @@ impl Widget for &Ledger {
     {
         let outer = Block::bordered()
         .title(" LEDGER ".to_line().centered())
+         .border_style(if self.selected {
+                Style::new().fg(ratatui::style::Color::Yellow)
+            } else if self.focused {
+                Style::new().fg(ratatui::style::Color::Blue)
+            } else {
+                Style::default()
+            })
         .border_type(BorderType::Rounded);
     outer.clone().render(area, buf);
 

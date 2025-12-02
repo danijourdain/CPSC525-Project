@@ -129,6 +129,8 @@ fn conn_handler(
                     obj.set_recipient(recipient)?;
                     obj.set_money(money)?;
                     obj.flush_record()?;
+
+                    println!("log: transacted. sender={sender}, recipient={recipient}, money={money}");
                 }
                 None => {
                     // the client requested balance data w/o being logged in.

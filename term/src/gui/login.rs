@@ -1,30 +1,44 @@
+use std::sync::mpsc::Sender;
+
 use ratatui::widgets::Widget;
 
 use ratatui::{
-    DefaultTerminal, Frame,
-    buffer::Buffer,
-    crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
-    layout::{Constraint, Direction, Layout, Rect},
+    crossterm::event::{KeyCode, KeyEvent},
+    layout::{Constraint, Direction, Layout},
     style::Stylize,
     symbols::border,
     text::{Line, Text},
     widgets::{Block, Padding, Paragraph},
 };
 
+use crate::backend::worker::ToWorkerMessageContents;
+
 #[derive(Default, Debug)]
 pub struct Login {
     pub tick: usize,
-    password: Vec<char>
+    password: Vec<char>,
+    locked: bool
 }
 
 impl Login {
-    pub fn handle_key_event(&mut self, event: KeyEvent) {
-        if event.code == KeyCode::Backspace {
+    pub fn handle_key_event(&mut self, event: KeyEvent, channel: &mut Sender<ToWorkerMessageContents>) {
+        if !self.locked {
+             if event.code == KeyCode::Backspace {
             self.password.pop();
         }
         if let KeyCode::Char(c) = event.code {
             self.password.push(c);
         }
+        if event.code == KeyCode::Enter {
+            let _ = channel.send(ToWorkerMessageContents::LoginAttempt(self.password.clone().into_iter().collect::<String>()));
+            self.locked = true;
+        }
+        }
+       
+    }
+    pub fn unlock(&mut self) {
+        self.password.clear();
+        self.locked = false;
     }
 }
 
@@ -36,7 +50,11 @@ impl Widget for &Login {
             " Submit ".into(),
             "[ENTER] ".blue().bold(),
         ]);
-         let desk_title = Line::from(" LOGIN ".bold());
+         let desk_title = Line::from(if self.locked {
+            " LOGIN 🔒 ".bold()
+         } else {
+            " LOGIN ".bold()
+         });
         let desk_block = Block::bordered()
             .padding(Padding::new(1, 1, 0, 0))
             .title(desk_title.left_aligned())
@@ -69,11 +87,16 @@ impl Widget for &Login {
             Line::from(vec![
                 "Password: ".into(),
                 self.password.iter().copied().collect::<String>().yellow(),
-                if self.tick % 10 < 5 {
+                if !self.locked {
+                    if self.tick % 10 < 5 {
                     "_".bold().rapid_blink()
                 } else {
                     " ".bold()
-                },
+                }
+                } else {
+                    "".bold()
+                }
+                ,
             ]),
         ]);
 

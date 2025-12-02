@@ -1,12 +1,9 @@
-use ratatui::{
-    style::Stylize,
-    text::{Span, Text, ToSpan, ToText},
-};
 
 pub mod account;
 pub mod desk;
 pub mod formbutton;
 pub mod ledger;
+pub mod waiting;
 pub mod login;
 
 pub fn format_money(money: usize) -> String {

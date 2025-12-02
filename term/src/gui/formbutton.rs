@@ -1,11 +1,6 @@
-use std::{str::FromStr, time::SystemTime};
 
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
-    style::{Color, Style, Stylize},
-    symbols::border,
-    text::{Line, Span, Text, ToSpan, ToText},
-    widgets::{Block, BorderType, Borders, Padding, Paragraph, Widget},
+    crossterm::event::{KeyCode, KeyEvent}, layout::{Constraint, Direction, Layout}, style::{Style, Stylize}, symbols::border, text::{ToSpan, ToText}, widgets::{Block, Padding, Paragraph, Widget}
 };
 
 use crate::gui::format_money;
@@ -59,11 +54,64 @@ impl FormButton {
             },
         )
     }
+    pub fn get_money(&self) -> Option<usize> {
+        match &self.form_type {
+            FormButtonType::Money { content } => Some(*content),
+            _ => None
+        }
+    }
+    pub fn get_position(&self) -> Option<usize> {
+        match &self.form_type {
+            FormButtonType::Cycle { options, position } => {
+                Some(*position)
+            },
+            _ => None
+        }
+    }
+    pub fn handle_key_event(&mut self, event: KeyEvent) {
+        if event.code == KeyCode::Up {
+            match &mut self.form_type {
+                FormButtonType::Cycle { options, position } => {
+                    *position = (*position + 1).min(options.len() - 1);
+                }
+                FormButtonType::Money { content } => {
+                    *content += 50;
+                }
+                _ => {}
+            }
+        }
+        if event.code == KeyCode::Down {
+            match &mut self.form_type {
+                FormButtonType::Cycle { options:_, position } => {
+                    if *position > 0 {
+                        *position -= 1;
+                    }
+                }
+                FormButtonType::Money { content } => {
+                    if *content > 0 {
+                        *content -= 50;
+                    }
+                    
+                }
+                _ => {}
+            }
+        }
+    }
     pub fn money(name: &str, initial: usize) -> Self {
         Self::new(name, FormButtonType::Money { content: initial })
     }
     pub fn clickable(name: &str) -> Self {
         Self::new(name, FormButtonType::Clickable)
+    }
+    pub fn set_selected(&mut self, select: bool) {
+        self.selected = select;
+    }
+    pub fn set_focused(&mut self, focus: bool) {
+        self.focused = focus;
+    }
+    pub fn reset(&mut self) {
+        self.set_selected(false);
+        self.set_focused(false);
     }
 }
 
@@ -136,7 +184,15 @@ impl Widget for &FormButton {
         
 
         // Render the up and down arrows.
-        Paragraph::new("↑↓").render(layout[1], buf);
+        Paragraph::new(if matches!(self.form_type, FormButtonType::Cycle { .. }) | matches!(self.form_type, FormButtonType::Money { .. }) {
+            if self.focused {
+                "↑↓".yellow().bold()
+            } else {
+                "↑↓".to_span()
+            }
+        } else {
+            "↑↓".to_span()
+        } ).render(layout[1], buf);
 
         block_a.render(area, buf);
     }
