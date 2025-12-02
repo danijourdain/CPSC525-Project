@@ -2,6 +2,8 @@ use std::{io::{Read, Write}, net::TcpStream, sync::mpsc::{Receiver, RecvTimeoutE
 
 use anyhow::Result;
 
+use crate::gui::ledger::Trade;
+
 
 
 pub enum ToWorkerMessageContents {
@@ -19,7 +21,8 @@ pub enum FromWorkerMsg {
     LoggedIn,
     LoginUnlock,
     ConnectionDead,
-    Balance(i32)
+    Balance(i32),
+    UpdateOrder(Vec<Trade>)
 }
 
 // pub struct ToWorkerMessage {
@@ -108,6 +111,13 @@ fn worker_thread_guarded(
                             let balance = get_balance(&mut stream)?;
                             let _ = to_master.send(FromWorkerMsg::Balance(balance));
 
+
+
+                            
+                            let orders = read_orders(&mut stream, 50)?;
+
+                            let _ = to_master.send(FromWorkerMsg::UpdateOrder(orders));
+
                         } else {
                             password = None;
                             let _ = to_master.send(FromWorkerMsg::ConnectionDead);
@@ -143,6 +153,59 @@ fn worker_thread_guarded(
 //             return False
 
 
+pub fn read_u32(stream: &mut TcpStream) -> Result<u32> {
+    let mut buf = [0u8; 4];
+    stream.read_exact(&mut buf)?;
+    Ok(u32::from_le_bytes(buf))
+}
+
+pub fn read_orders(stream: &mut TcpStream, top: usize) -> Result<Vec<Trade>> {
+
+    let mut buffer = vec![];
+
+
+    // Write the discrminiator.
+    stream.write_all(&[ 4u8 ])?;
+
+    // Write the request.
+    stream.write_all(&(top as u32).to_le_bytes())?;
+
+
+    // Read the length.
+    let mut length = [0u8; 4];
+    stream.read_exact(&mut length).inspect_err(|_| println!("Error:"))?;
+    let mut length = u32::from_le_bytes(length);
+
+    // println!("orders: {length}");
+
+    while length > 0 {
+
+        let sender = read_u32(stream)?;
+        let recipient = read_u32(stream)?;
+        let money = read_u32(stream)?;
+
+
+        buffer.push(Trade {
+            money: money as usize,
+            receiver: recipient as usize,
+            sender: sender as usize
+        });
+
+
+
+        // println!("{sender},{recipient},{money}");
+        
+
+        length -= 1;
+    }
+
+
+
+    // Flip the buffer.
+    buffer.reverse();
+    Ok(buffer)
+}
+
 fn try_trade(sender: usize, receiver: usize, money: usize, stream: &mut TcpStream) -> Result<()> {
     // self.server.sendall(b'\2' + int.to_bytes(self.region, length=4, byteorder='little', signed=True) + int.to_bytes(recipient, length=4, byteorder='little', signed=True) + int.to_bytes(money, length=4, byteorder='little', signed=True))
 
@@ -165,7 +228,7 @@ fn get_balance(stream: &mut TcpStream) -> Result<i32> {
     Ok(i32::from_le_bytes(i32_buf))
 }
 
-fn try_login(stream: &mut TcpStream, password: &str) -> Result<bool> {
+pub fn try_login(stream: &mut TcpStream, password: &str) -> Result<bool> {
 
 
     let mut payload = vec![ 0x00, 0x00 ];

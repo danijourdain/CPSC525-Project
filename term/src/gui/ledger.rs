@@ -23,6 +23,9 @@ impl Ledger {
         }
     }
 
+    pub fn set_order_list(&mut self, list: Vec<Trade>) {
+        self.trades = list;
+    }
     pub fn set_selected(&mut self, select: bool) {
         self.selected = select;
     }
@@ -86,6 +89,7 @@ impl Widget for &Ledger {
 }
 
 
+#[derive(Debug)]
 pub struct Trade {
     pub sender: usize,
     pub receiver: usize,

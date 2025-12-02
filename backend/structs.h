@@ -50,11 +50,20 @@ typedef struct chan_t {
     Signal sig;
 } Channel;
 
+
+
+typedef struct order_list_t {
+    Order *list;    
+    int capacity;
+    int length;
+} OrderList;
+
 typedef struct masterbook_t {
     Buffer working;
     Signal book_signal;
     Channel chan_t;
     FILE *ledger_fd;
+    OrderList order_list;
     pthread_t handle;
     int balances[REGIONS];
     pthread_mutex_t balance_mutex;

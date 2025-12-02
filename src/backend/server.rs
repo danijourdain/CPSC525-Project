@@ -137,6 +137,27 @@ fn conn_handler(
                     return Err(anyhow!("client used bad sequence."));
                 }
             }
+        } else if delimiter == 4 {
+            println!("got it.");
+            let top_n = read_u32(&mut stream)?;
+
+            let records = state.get_top_n_orders(top_n as usize);
+
+
+            stream.write_all(&(records.len() as u32).to_le_bytes())?;
+
+            let mut buffer = vec![];
+            // buffer.extend_from_slice(&(records.len() as u32).to_le_bytes());
+            for i in records {
+                buffer.extend_from_slice(&(i.sender as u32).to_le_bytes());
+                buffer.extend_from_slice(&(i.recipient as u32).to_le_bytes());
+                buffer.extend_from_slice(&(i.money as u32).to_le_bytes());
+            }
+            stream.write_all(&buffer)?;
+
+
+
+
         } else {
             println!("log(error): client used weird delimiter: {delimiter}");
         }

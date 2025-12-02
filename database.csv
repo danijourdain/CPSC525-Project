@@ -1,18 +1,22 @@
 sender,recipient,money
-Calgary, New York, 35
-Calgary, New York, 35
-Calgary, Calgary, 35
-Calgary, Calgary, 35
-Calgary, Calgary, 85
-Calgary, Calgary, 85
-Calgary, New York, 85
-Calgary, Calgary, 250
-Calgary, Calgary, 250
-Calgary, Calgary, 250
-Calgary, Calgary, 250
-Calgary, Calgary, 250
-Calgary, Calgary, 250
-Calgary, Calgary, 250
-Calgary, New York, 250
-Calgary, New York, 250
-Calgary, New York, 250
+0,1,35
+0,1,35
+0,1,31
+0,1,620,0,250
+0,0,250
+0,0,250
+0,1,250
+0,1,250
+0,1,250
+0,1,250
+0,1,250
+0,1,250
+0,1,250
+0,0,250
+0,0,250
+0,0,250
+0,0,250
+0,0,250
+0,0,250
+0,0,250
+0,0,250

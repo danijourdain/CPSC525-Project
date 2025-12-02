@@ -13,5 +13,8 @@ int get_balance(MasterBook *ptr, int region);
 char *get_region_name(int id);
 char *get_region_password(int id);
 
+int get_database_length(MasterBook *book);
+
+Order get_database_entry_at(MasterBook *book, int position);
 
 #endif

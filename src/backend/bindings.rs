@@ -1,7 +1,17 @@
-use core::panic;
+use core::{ffi, panic};
 use std::{ffi::{CStr, CString}, io::ErrorKind};
 
 
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct Order {
+    pub recipient: i32,
+    pub sender: i32,
+    pub money: i32,
+    pub region: i32,
+    status: i32
+}
 
 
 unsafe extern "C" {
@@ -43,6 +53,14 @@ unsafe extern "C" {
     ) -> core::ffi::c_int;
     fn try_lock(ptr: *const (), password: *const core::ffi::c_char) -> core::ffi::c_int;
     fn release_lock(ptr: *const ());
+
+//     int get_database_length(MasterBook *book);
+
+// Order get_database_entry_at(MasterBook *book, int position);
+
+
+    fn get_database_length(ptr: *const ()) -> i32;
+    fn get_database_entry_at(ptr: *const (), position: ffi::c_int) -> Order;
 }
 
 
@@ -80,11 +98,46 @@ impl MasterOrderBook {
         if ptr.is_null() {
             panic!("failed to initialize the master order book!");
         }
-        Self {
+
+
+        loop {
+            let w = unsafe { get_database_length(ptr) };
+        println!("lenght: {w}");
+        if w!= 0 {
+            break;
+        }
+        }
+
+        
+
+        let obj = Self {
             handle: ptr,
             servers: vec![]
-        }
+        };
+
+        println!("Hello: {:?}", obj.get_top_n_orders(2));
+
+        obj
     }
+
+    pub fn get_top_n_orders(&self, mut n: usize) -> Vec<Order> {
+        let mut buffer = vec![];
+        let mut end = unsafe { get_database_length(self.handle) } as usize;
+        if end == 0 {
+            return vec![]; // nothing in the list.
+        }
+
+        if n > end {
+            n = end;
+        }
+
+        while end - n < end {
+            buffer.push(unsafe { get_database_entry_at(self.handle, (end - n) as i32) });
+            n -= 1;
+        }
+        buffer
+    }
+
     /// Opens a new order server given the region ID.
     pub fn open_order_server(&mut self, id: i32) {
         let order = OrderServer::open(id, &*self);

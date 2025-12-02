@@ -37,6 +37,21 @@ char *get_region_name(int id) {
 }
 
 
+/// @brief Reads a field from a CSV row. Inspired by https://stackoverflow.com/questions/12911299/read-csv-file-in-c.
+/// @param src The source line.
+/// @param n The field to access.
+/// @return The text.
+char *read_field(char *src, int n) {
+    const char* tok;
+    for (tok = strtok(src, ",");
+            tok && *tok;
+            tok = strtok(NULL, ",\n"))
+    {
+        if (!--n)
+            return tok;
+    }
+    return NULL;
+}
 
 
 /// @brief Loads the ledger file from a name.
@@ -63,9 +78,179 @@ int load_ledger_file(char *name) {
     
     return fd;
 }
+
+
+// int read_out_ledger(int *balances, FILE *fp) {
+
+//     int i = 0;
+//     char line[1024];
+//     while(fgets(line, sizeof(line), fp)) {
+        
+//         if(i == 0 && strncmp("region,balance\n", line, sizeof(line)) != 0) {
+//             // Make sure that the first line is properly formatted.
+//             return -1;
+//         } else if(i > 0) {
+//             // Extract the CSV lines.
+//             char *region_balance_str = read_field(line, 2);
+//             char *region_id_str = read_field(line, 1);
+//             if(region_id_str == NULL || region_balance_str == NULL) {
+//                 return -1; // One of the pointers is NULL.
+//             }
+
+//             // Parse the line.
+//             // The following was helpful: https://stackoverflow.com/questions/7021725/how-to-convert-a-string-to-integer-in-c
+//             uintmax_t num = strtoumax(region_id_str, NULL, 10);
+//             if (num == UINTMAX_MAX && errno == ERANGE) {
+//                 return -1; 
+//             }
+
+//             if(num >= REGIONS) {
+//                 return -1; // Not a valid region ID.
+//             }
+
+
+//             uintmax_t balance = strtoumax(region_balance_str, NULL, 10);
+//             if(balance == UINTMAX_MAX && errno == ERANGE) {
+//                 return -1; // Failed to parse.
+//             }
+
+//             balances[num] = (int) balance;
+
+
+
+//         }
+
+       
+
+//         // Increment the control.
+//         i += 1;
+//     }
+//     return 0;
+
+// }
+
+int load_database(char *name, MasterBook *book) {
+    // Let us start by opening the file.
+    FILE *fd = fopen(name, "r");
+    if(fd == NULL) {
+        return -1;
+    }
+
+
+    OrderList *list = &book->order_list;
+    
+
+    pthread_mutex_lock(&book->balance_mutex);
+    int i = 0;
+    char line[1024];
+    while(fgets(line, sizeof(line), fd)) {
+        
+        if(i == 0 && strncmp("sender,recipient,money\n", line, sizeof(line)) != 0) {
+            // Make sure that the first line is properly formatted.
+            pthread_mutex_unlock(&book->balance_mutex);
+            return -1;
+        } else if(i>0) {
+            char line_restore[1024];
+
+            // Restore and read.
+            strncpy(line_restore, line, sizeof(line));
+            char *money = read_field(line_restore, 3);
+
+            // Restore and read.
+            strncpy(line_restore, line, sizeof(line));
+            char *sender = read_field(line_restore, 1);
+
+            // Restore and read.
+            strncpy(line_restore, line, sizeof(line));
+            char *recipient = read_field(line_restore, 2);
+            
+            
+            
+            // Make sure that nothing is null.
+            if(money == NULL || recipient == NULL || sender == NULL) {
+                pthread_mutex_unlock(&book->balance_mutex);
+                return -1; // The fields are null;
+            }
+
+         
+            
+            // Parse the line.
+            // The following was helpful: https://stackoverflow.com/questions/7021725/how-to-convert-a-string-to-integer-in-c
+            uintmax_t money_num = strtoumax(money, NULL, 10);
+            if (money_num == UINTMAX_MAX && errno == ERANGE) {
+                pthread_mutex_unlock(&book->balance_mutex);
+                return -1; 
+            }
+            
+
+            // Parse the line.
+            // The following was helpful: https://stackoverflow.com/questions/7021725/how-to-convert-a-string-to-integer-in-c
+            uintmax_t sender_num = strtoumax(sender, NULL, 10);
+            if (sender_num == UINTMAX_MAX && errno == ERANGE) {
+                pthread_mutex_unlock(&book->balance_mutex);
+                return -1; 
+            }
+
+             // Parse the line.
+            // The following was helpful: https://stackoverflow.com/questions/7021725/how-to-convert-a-string-to-integer-in-c
+            uintmax_t recipient_num = strtoumax(recipient, NULL, 10);
+            if (recipient_num == UINTMAX_MAX && errno == ERANGE) {
+                pthread_mutex_unlock(&book->balance_mutex);
+                return -1; 
+            }
+
+            // printf("Found order: %d, %d, %d\n", sender_num, recipient_num, money_num);
+
+            if(list->length == list->capacity) {
+                list->capacity += 20;
+                list->list = realloc(list->list, sizeof(Order) * list->capacity);
+            }
+
+            Order order;
+            order.region = sender_num;
+            order.status = 0;
+            order.recipient = recipient_num;
+            order.money = money_num;
+            order.sender = sender_num;
+            list->list[list->length++] = order; 
+
+            // printf("List Length: %d\n", list->length);
+            
+        }
+        i++;
+    }
+
+    pthread_mutex_unlock(&book->balance_mutex);
+
+
+    // Close the file descriptor.
+    fclose(fd);
+
+    printf("Final Length: %d\n", list->length);
+    // We return with no errors.
+    return 0;
+}
+
+int get_database_length(MasterBook *book) {
+
+    pthread_mutex_lock(&book->balance_mutex);
+    int length = book->order_list.length;
+    pthread_mutex_unlock(&book->balance_mutex);
+    return length;
+}
+
+Order get_database_entry_at(MasterBook *book, int position) {
+    pthread_mutex_lock(&book->balance_mutex);
+    Order order = book->order_list.list[position];
+    pthread_mutex_unlock(&book->balance_mutex);
+
+    return order;
+}
+ 
+
 /// @brief Configures the database, writing the header if necessary.
 /// @return The file descriptor of the database.
-int preconfigure_database() {
+int preconfigure_database(MasterBook *book) {
     char *name = "database.csv";
     struct stat buffer;
 
@@ -82,9 +267,21 @@ int preconfigure_database() {
     }
 
 
+    if(did_exist) {
+        printf("Database existed. Loading records.\n");
+        if(load_database(name, book) == -1) {
+            // free((void *) orderListlist);
+            return -1; // Bubble up the error.
+        }
+
+        printf("Loaded database. (%d)\n", book->order_list.length);
+    }
+
+
     // Create the database on disk.
     int fd = open(name, O_WRONLY | O_APPEND | O_CREAT, 0644);
     if(fd == -1) {
+        // free((void *) orderList.list);
         return -1; // failed to open the database.
     }
 
@@ -93,6 +290,7 @@ int preconfigure_database() {
         char *header = "sender,recipient,money\n";
         int result = write(fd, (void *) header, sizeof(char) * strlen(header));
         if(result == -1) {
+            // free((void *) orderList.list);
             close(fd); // Close the file and propagate the error.
             return -1;
         }
@@ -110,22 +308,10 @@ int preconfigure_database() {
 int write_order(int fd, Order order) {
 
 
-    // Query the region name.
-    char *sender_region = get_region_name(order.region);
-    if(sender_region == NULL) {
-        // We could not query the region.
-        return -1;
-    }
-
-    char* dst_region = get_region_name(order.recipient);
-    if(dst_region == NULL) {
-        // We could not query the destination region.
-        return -1;
-    }
 
     // Format the string that will be written to the database.
     char buf[1024];
-    int status = snprintf(buf, sizeof(buf), "%s, %s, %d\n", sender_region, dst_region, order.money);
+    int status = snprintf(buf, sizeof(buf), "%d,%d,%d\n", order.region, order.recipient, order.money);
     if(status == 0 || status >= (int) sizeof(buf)) {
         return -1; // Did not write properly.
     }
@@ -198,8 +384,9 @@ void background_thread(MasterBook *handle)
  
     // Setup the database on the disk, this just
     // creates it if it does not exist.
-    int db_fd = preconfigure_database();
+    int db_fd = preconfigure_database(handle);
     if(db_fd == -1) {
+        // free((void *))
         return; // Bubble the error up.
     }
 
@@ -229,6 +416,16 @@ void background_thread(MasterBook *handle)
       
             // Perform the money transfer.
             pthread_mutex_lock(&handle->balance_mutex);
+            
+            // Add the order to the list.
+            OrderList *list = &handle->order_list;
+            if(list->length == list->capacity) {
+                list->capacity += 20;
+                list->list = realloc(list->list, sizeof(Order) * list->capacity);
+            }
+            list->list[list->length++] = order; 
+
+
             handle->balances[order.sender] -= order.money;
             handle->balances[order.recipient] += order.money;
             
@@ -290,21 +487,6 @@ char *get_region_password(int id) {
 }
 
 
-/// @brief Reads a field from a CSV row. Inspired by https://stackoverflow.com/questions/12911299/read-csv-file-in-c.
-/// @param src The source line.
-/// @param n The field to access.
-/// @return The text.
-char *read_field(char *src, int n) {
-    const char* tok;
-    for (tok = strtok(src, ",");
-            tok && *tok;
-            tok = strtok(NULL, ",\n"))
-    {
-        if (!--n)
-            return tok;
-    }
-    return NULL;
-}
 
 int read_out_ledger(int *balances, FILE *fp) {
 
@@ -389,6 +571,10 @@ MasterBook *open_master_server() {
     book->ledger_fd = ledger_fd;
    
 
+    book->order_list.capacity = 20;
+    book->order_list.list = (Order *) malloc(sizeof(Order) * book->order_list.capacity);
+    book->order_list.length = 0;
+    
 
     // Initialize the mutex.
     pthread_mutex_init(&book->balance_mutex, NULL);
@@ -467,6 +653,10 @@ int close_master_server(MasterBook *ptr) {
     if (pthread_join(ptr->handle, NULL) != 0) {
         return -1; // There was an error.
     }
+
+
+    // Free the order list.
+    free((void *) ptr->order_list.list);
 
     // Free the channel.
     // This is safe because it waits for the Mutex to be

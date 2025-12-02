@@ -1,7 +1,5 @@
 use std::{
-    io,
-    sync::mpsc::{self, Receiver, Sender, channel},
-    time::Duration,
+    io, net::TcpStream, process::exit, sync::mpsc::{self, Receiver, Sender, channel}, time::Duration
 };
 
 use ratatui::{
@@ -16,7 +14,7 @@ use ratatui::{
 };
 
 use crate::{
-    backend::worker::{FromWorkerMsg, ToWorkerMessageContents, worker_thread},
+    backend::worker::{FromWorkerMsg, ToWorkerMessageContents, read_orders, try_login, worker_thread},
     gui::{
         account::Account, formbutton::FormButton, ledger::Ledger, login::Login, waiting::Waiting,
     },
@@ -44,7 +42,7 @@ pub enum AppState {
     Exit,
 }
 
-// #[derive(Debug)]
+
 pub struct App {
     exit: bool,
     login: Login,
@@ -136,6 +134,9 @@ impl App {
                 }
                 FromWorkerMsg::Balance(bal) => {
                     self.account.set_balance(bal);
+                }
+                FromWorkerMsg::UpdateOrder(orders) => {
+                    self.ledger.set_order_list(orders);
                 }
             }
         }
@@ -400,6 +401,7 @@ impl Widget for &App {
 }
 
 fn main() -> io::Result<()> {
+
     let mut terminal = ratatui::init();
     let app_result = App::new().run(&mut terminal);
     ratatui::restore();
