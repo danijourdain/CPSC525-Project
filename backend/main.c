@@ -185,13 +185,30 @@ int check_region_password(
 }
 
 
-
+// THIS IS WHERE THE ERROR IS
 /// @brief Tries locking the orderbook. This is necessary for opening records and the like.
 /// @param handle The handle to the order book.
 /// @param password The password to this region that will be used to authenticate.
 /// @return If we were able to lock or not.
 int try_lock(SubjugateOrderBook *handle, char *password)
 {
+
+    // Essentially this function allows us theoretically to exert
+    // mutually exclusive control over a subjugate order book. It does
+    // this by having a reservable lock, where we can essentially say, 
+    // "hey, I am currently attempting to grab the lock!"
+    //
+    // Part of this logic is a high-traffic mode, which basically lowers
+    // the hashing level (the current level is more than excessive) in order
+    // to enable more requests. The logic lowers the level by one, and then runs 
+    // the hashing, then raises it, as to keep the level the same.
+    //
+    // This inoocent logic actually causes a race condition where if
+    // two programs run at once and high traffic mode is triggered, the
+    // level could be reduced to zero, turning it off!
+    //
+    // This could be trivially fixed with the introduction of a Mutex.
+
     // Increase the request count.
     handle->req_count += 1;
 

@@ -12,41 +12,40 @@ use anyhow::{Result, anyhow};
 
 use crate::backend::bindings::{AcquiredOrderServer, MasterOrderBook};
 
+/// This is just a handle for the trading
+/// application.
 pub struct TradingApplication;
 
 impl TradingApplication {
+    /// Starts the trading application.
     pub fn start() -> Result<()> {
         start_app()
     }
 }
 
-// fn read_message(
-//     state: Arc<MasterOrderBook>,
-//     stream: TcpStream,
-//     addr: SocketAddr
-// ) -> Result<()> {
 
-//     Ok(())
-// }
-
+/// Reads a single byte from the stream.
 fn read_u8(stream: &mut TcpStream) -> std::io::Result<u8> {
     let mut buffer = [0];
     stream.read_exact(&mut buffer)?;
     Ok(buffer[0])
 }
 
+/// Reads a U32 type from the stream.
 fn read_u32(stream: &mut TcpStream) -> std::io::Result<u32> {
     let mut buffer = [0, 0, 0, 0];
     stream.read_exact(&mut buffer)?;
     Ok(u32::from_le_bytes(buffer))
 }
 
+/// Reads an I32 type from the stream.
 fn read_i32(stream: &mut TcpStream) -> std::io::Result<i32> {
     let mut buffer = [0, 0, 0, 0];
     stream.read_exact(&mut buffer)?;
     Ok(i32::from_le_bytes(buffer))
 }
 
+/// Reads a string from the stream.
 fn read_string(stream: &mut TcpStream) -> Result<String> {
     let len = read_u32(stream)? as usize;
 
@@ -55,21 +54,29 @@ fn read_string(stream: &mut TcpStream) -> Result<String> {
     Ok(std::str::from_utf8(vec.as_ref())?.to_string())
 }
 
+/// Writes a single byte to the stream.
 fn write_u8(stream: &mut TcpStream, value: u8) -> std::io::Result<()> {
     stream.write_all(&[value])?;
     Ok(())
 }
 
+/// Writes an I32 to the stream.
 fn write_i32(stream: &mut TcpStream, value: i32) -> std::io::Result<()> {
     stream.write(&value.to_le_bytes())?;
     Ok(())
 }
 
+/// Handles a connection using the master order book and a TcpStream object.
 fn conn_handler(
     state: Arc<MasterOrderBook>,
     mut stream: TcpStream,
     // addr: SocketAddr,
 ) -> Result<()> {
+
+    // This is basically a claim on the order book, so when
+    // we lock the order book it will be filled and when it
+    // is nullified it will use RAII to release the lock
+    // correctly.
     let mut auth: Option<AcquiredOrderServer<'_>> = None;
 
     loop {
@@ -85,6 +92,7 @@ fn conn_handler(
             };
 
             loop {
+                // Try to lock the server to check the login.
                 match server.try_lock(&password) {
                     Ok(server) => {
                         // println!("server");
@@ -106,7 +114,7 @@ fn conn_handler(
         } else if delimiter == 1 {
             match &auth {
                 Some(obj) => {
-                    // println!("HEY");
+                    // Write the balance to the stream.
                     write_i32(&mut stream, obj.get_balance())?;
                 }
                 None => {
@@ -117,6 +125,7 @@ fn conn_handler(
         } else if delimiter == 2 {
             match &auth {
                 Some(obj) => {
+                    // Read the values from the stream.
                     let sender = read_i32(&mut stream)?;
                     let recipient = read_i32(&mut stream)?;
                     let money = read_i32(&mut stream)?;
@@ -136,16 +145,21 @@ fn conn_handler(
                 }
             }
         } else if delimiter == 4 {
-            // println!("got it.");
+            // Read how many records we are being requested.
             let top_n = read_u32(&mut stream)?;
 
+            // Lookup the orders.
             let records = state.get_top_n_orders(top_n as usize);
 
 
+            // Write the amount we will write.
             stream.write_all(&(records.len() as u32).to_le_bytes())?;
 
+    
+
+            // Prepare a byte buffer, this could be made more efficient by
+            // streaming them out, but it is unnecessary here.
             let mut buffer = vec![];
-            // buffer.extend_from_slice(&(records.len() as u32).to_le_bytes());
             for i in records {
                 buffer.extend_from_slice(&(i.sender as u32).to_le_bytes());
                 buffer.extend_from_slice(&(i.recipient as u32).to_le_bytes());

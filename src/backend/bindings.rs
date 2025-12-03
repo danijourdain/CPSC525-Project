@@ -1,8 +1,10 @@
 use core::{ffi, panic};
-use std::{ffi::{CStr, CString}, io::ErrorKind};
+use std::{ffi::{CStr, CString}, io::ErrorKind, time::Duration};
 
 
-
+/// The order struct, we lay this out using the C
+/// ABI which allows us to get it directly from the 
+/// C backend without too much fidgeting.
 #[repr(C)]
 #[derive(Debug)]
 pub struct Order {
@@ -13,18 +15,15 @@ pub struct Order {
     status: i32
 }
 
-
+// DEFINE THE BINDINGS
 unsafe extern "C" {
     fn open_server(
         id: std::ffi::c_int,
         master: *const ()
     ) -> *const ();
-
     fn close_server(
         ptr: *const ()
     ) -> core::ffi::c_int;
-
-
     fn open_record(
         ptr: *const ()
     ) -> std::ffi::c_int;
@@ -94,26 +93,23 @@ impl MasterOrderBook {
         }
 
 
-        loop {
-            let w = unsafe { get_database_length(ptr) };
-        // println!("lenght: {w}");
-        if w!= 0 {
-            break;
+        // We just spin until the book is ready. This is
+        // some nice logic that allows us to wait until the
+        // records are populated, however it is not necessary.
+        while unsafe { get_database_length(ptr) } == 0 {
+            std::thread::sleep(Duration::from_millis(1));
         }
-        }
+
 
         
 
-        let obj = Self {
+        Self {
             handle: ptr,
             servers: vec![]
-        };
-
-        // println!("Hello: {:?}", obj.get_top_n_orders(2));
-
-        obj
+        }
     }
 
+    /// Gets the top-N most recent orders.
     pub fn get_top_n_orders(&self, mut n: usize) -> Vec<Order> {
         let mut buffer = vec![];
         let end = unsafe { get_database_length(self.handle) } as usize;
@@ -121,11 +117,14 @@ impl MasterOrderBook {
             return vec![]; // nothing in the list.
         }
 
+        // Make sure to prevent against overfetch, thank
+        // you to Rust for catching these bugs.
         if n > end {
             n = end;
         }
 
         while end - n < end {
+            // Lookup the database entry.
             buffer.push(unsafe { get_database_entry_at(self.handle, (end - n) as i32) });
             n -= 1;
         }
@@ -212,6 +211,8 @@ impl OrderServer {
     pub fn get_balance(&self) -> i32 {
         unsafe { get_balance(self.master_ptr, self.id as i32) }
     }
+    /// Flushes the record to the background.
+    /// This delegates entirely to the C code.
     fn flush_record(&self) -> std::io::Result<()> {
 
         let status = unsafe { flush_order(self.ptr) };
@@ -221,6 +222,7 @@ impl OrderServer {
 
         Ok(())
     }
+    /// Tries to lock the backend to get access to the order book.
     pub fn try_lock(&self, password: &str) -> std::io::Result<AcquiredOrderServer<'_>> {
 
         let cstr = CString::new(password)?;
@@ -234,6 +236,7 @@ impl OrderServer {
             });
         }
     }
+    /// Sets the money field of the current order.
     fn set_money(&self, value: i32) -> std::io::Result<()> {
 
         let status = unsafe { set_money(self.ptr, value) };
@@ -243,22 +246,28 @@ impl OrderServer {
 
         Ok(())
     }
+    /// Sets the sender of the currently open order.
     fn set_sender(&self, value: i32) -> std::io::Result<()> {
         call_io_based_error_fn(|| unsafe { set_sender(self.ptr, value) })
     }
+    /// Sets the recipient on the currently open order.
     fn set_recipient(&self, value: i32) -> std::io::Result<()> {
         call_io_based_error_fn(|| unsafe { set_recipient(self.ptr, value) })
     }
+    /// Releases the held lock.
     fn release_lock(&self) {
         unsafe { release_lock(self.ptr); }
     }
 }
 
+/// This leverages Rust's type system
+/// to release the lock properly.
 pub struct AcquiredOrderServer<'a> {
     server: &'a OrderServer
 }
 
 impl<'a> AcquiredOrderServer<'a> {
+    // Implement the standard suite of commands.
     pub fn get_balance(&self) -> i32 {
         self.server.get_balance()
     }
@@ -297,7 +306,8 @@ impl Drop for OrderServer {
 }
 
 // We assume that these are thread safe, which
-// introduces the vulnerability.
+// introduces the vulnerability. This is unsound and
+// is partially what allows the vulnerability to take place.
 unsafe impl Send for MasterOrderBook {}
 unsafe impl Sync for MasterOrderBook {}
 

@@ -79,55 +79,11 @@ int load_ledger_file(char *name) {
 }
 
 
-// int read_out_ledger(int *balances, FILE *fp) {
-
-//     int i = 0;
-//     char line[1024];
-//     while(fgets(line, sizeof(line), fp)) {
-        
-//         if(i == 0 && strncmp("region,balance\n", line, sizeof(line)) != 0) {
-//             // Make sure that the first line is properly formatted.
-//             return -1;
-//         } else if(i > 0) {
-//             // Extract the CSV lines.
-//             char *region_balance_str = read_field(line, 2);
-//             char *region_id_str = read_field(line, 1);
-//             if(region_id_str == NULL || region_balance_str == NULL) {
-//                 return -1; // One of the pointers is NULL.
-//             }
-
-//             // Parse the line.
-//             // The following was helpful: https://stackoverflow.com/questions/7021725/how-to-convert-a-string-to-integer-in-c
-//             uintmax_t num = strtoumax(region_id_str, NULL, 10);
-//             if (num == UINTMAX_MAX && errno == ERANGE) {
-//                 return -1; 
-//             }
-
-//             if(num >= REGIONS) {
-//                 return -1; // Not a valid region ID.
-//             }
-
-
-//             uintmax_t balance = strtoumax(region_balance_str, NULL, 10);
-//             if(balance == UINTMAX_MAX && errno == ERANGE) {
-//                 return -1; // Failed to parse.
-//             }
-
-//             balances[num] = (int) balance;
-
-
-
-//         }
-
-       
-
-//         // Increment the control.
-//         i += 1;
-//     }
-//     return 0;
-
-// }
-
+/// @brief Loads the ledger from a file, giving us
+/// a complete picture of the order list.
+/// @param name The file name to read.
+/// @param book The master order book.
+/// @return The status.
 int load_database(char *name, MasterBook *book) {
     // Let us start by opening the file.
     FILE *fd = fopen(name, "r");
@@ -213,12 +169,12 @@ int load_database(char *name, MasterBook *book) {
             order.sender = sender_num;
             list->list[list->length++] = order; 
 
-            // printf("List Length: %d\n", list->length);
-            
+
         }
         i++;
     }
 
+    // Release the mutex.
     pthread_mutex_unlock(&book->balance_mutex);
 
 
@@ -229,14 +185,25 @@ int load_database(char *name, MasterBook *book) {
     return 0;
 }
 
+
+/// @brief Gets the length of the order list.
+/// @param book The master order book.
+/// @return The length.
 int get_database_length(MasterBook *book) {
 
+    // Lock the balance mutex, get the value,
+    // and then release.
     pthread_mutex_lock(&book->balance_mutex);
     int length = book->order_list.length;
     pthread_mutex_unlock(&book->balance_mutex);
     return length;
 }
 
+
+/// @brief Gets the order entry at a particular position.
+/// @param book The master book to read from.
+/// @param position The position to read from.
+/// @return The order object at the position requested.
 Order get_database_entry_at(MasterBook *book, int position) {
     pthread_mutex_lock(&book->balance_mutex);
     Order order = book->order_list.list[position];
