@@ -2,7 +2,6 @@ use ratatui::text::ToLine;
 use ratatui::widgets::Widget;
 
 use ratatui::{
-    crossterm::event::{KeyCode, KeyEvent},
     layout::{Constraint, Direction, Layout},
     style::Stylize,
     symbols::border,
@@ -10,31 +9,19 @@ use ratatui::{
     widgets::{Block, Padding, Paragraph},
 };
 
+/// The waiting widget.
 #[derive(Default, Debug)]
 pub struct Waiting {
+    /// The tick count, which is used for the pending animation.
     pub tick: usize,
-    password: Vec<char>
-}
-
-impl Waiting {
-    pub fn handle_key_event(&mut self, event: KeyEvent) {
-        if event.code == KeyCode::Backspace {
-            self.password.pop();
-        }
-        if let KeyCode::Char(c) = event.code {
-            self.password.push(c);
-        }
-    }
 }
 
 impl Widget for &Waiting {
+    /// Render the widget.
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
         where
             Self: Sized {
-                let instructions = Line::from(vec![
-            " Submit ".into(),
-            "[ENTER] ".blue().bold(),
-        ]);
+
          let desk_title = Line::from(" LOGIN ".bold());
         let desk_block = Block::bordered()
             .padding(Padding::new(1, 1, 0, 0))
@@ -61,20 +48,6 @@ impl Widget for &Waiting {
             ],
         )
         .split(layout[1]);
-
-        // // desk_block.render(layout2[1], buf);
-        //  let counter_text = Text::from(vec![
-        //     Line::from(vec!["Region:   ".into(), "Calgary".green().italic()]),
-        //     Line::from(vec![
-        //         "Password: ".into(),
-        //         self.password.iter().copied().collect::<String>().yellow(),
-        //         if self.tick % 10 < 5 {
-        //             "_".bold().rapid_blink()
-        //         } else {
-        //             " ".bold()
-        //         },
-        //     ]),
-        // ]);
 
         let ye =("WAITING FOR CONNECTION".to_owned() + &['.'].iter().cycle().take((self.tick / 3) % 8).collect::<String>()).to_string();
 

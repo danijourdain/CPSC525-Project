@@ -13,29 +13,41 @@ use ratatui::{
 
 use crate::backend::worker::ToWorkerMsg;
 
+/// The Login Widget
 #[derive(Default, Debug)]
 pub struct Login {
+    /// The tick count, this is used to blink the cursor.
     pub tick: usize,
+    /// The password buffer.
     password: Vec<char>,
-    locked: bool
+    /// If the login is currently locked.
+    locked: bool,
 }
 
 impl Login {
+    /// Handles a key event for the login widget.
     pub fn handle_key_event(&mut self, event: KeyEvent, channel: &mut Sender<ToWorkerMsg>) {
+        // If we are locked then we should not do anything.
         if !self.locked {
-             if event.code == KeyCode::Backspace {
-            self.password.pop();
+            if event.code == KeyCode::Backspace {
+                self.password.pop();
+            }
+            // Add a character to the password buffer.
+            if let KeyCode::Char(c) = event.code {
+                self.password.push(c);
+            }
+            // Enter the password, which should lock
+            // the field.
+            if event.code == KeyCode::Enter {
+                let _ = channel.send(ToWorkerMsg::LoginAttempt(
+                    self.password.clone().into_iter().collect::<String>(),
+                ));
+                self.locked = true;
+            }
         }
-        if let KeyCode::Char(c) = event.code {
-            self.password.push(c);
-        }
-        if event.code == KeyCode::Enter {
-            let _ = channel.send(ToWorkerMsg::LoginAttempt(self.password.clone().into_iter().collect::<String>()));
-            self.locked = true;
-        }
-        }
-       
     }
+    /// Unlock the login widget, allowing it 
+    /// to be used again.
     pub fn unlock(&mut self) {
         self.password.clear();
         self.locked = false;
@@ -43,18 +55,17 @@ impl Login {
 }
 
 impl Widget for &Login {
+    /// Render the login widget.
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
-        where
-            Self: Sized {
-                let instructions = Line::from(vec![
-            " Submit ".into(),
-            "[ENTER] ".blue().bold(),
-        ]);
-         let desk_title = Line::from(if self.locked {
+    where
+        Self: Sized,
+    {
+        let instructions = Line::from(vec![" Submit ".into(), "[ENTER] ".blue().bold()]);
+        let desk_title = Line::from(if self.locked {
             " LOGIN 🔒 ".bold()
-         } else {
+        } else {
             " LOGIN ".bold()
-         });
+        });
         let desk_block = Block::bordered()
             .padding(Padding::new(1, 1, 0, 0))
             .title(desk_title.left_aligned())
@@ -82,21 +93,20 @@ impl Widget for &Login {
         .split(layout[1]);
 
         // desk_block.render(layout2[1], buf);
-         let counter_text = Text::from(vec![
+        let counter_text = Text::from(vec![
             Line::from(vec!["Region:   ".into(), "Calgary".green().italic()]),
             Line::from(vec![
                 "Password: ".into(),
                 self.password.iter().copied().collect::<String>().yellow(),
                 if !self.locked {
                     if self.tick % 10 < 5 {
-                    "_".bold().rapid_blink()
-                } else {
-                    " ".bold()
-                }
+                        "_".bold().rapid_blink()
+                    } else {
+                        " ".bold()
+                    }
                 } else {
                     "".bold()
-                }
-                ,
+                },
             ]),
         ]);
 

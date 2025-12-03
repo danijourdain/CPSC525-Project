@@ -65,6 +65,8 @@ int iterations_for_level(SecLevel level) {
         return 100000;
     } else if(level == SEC_VERYHIGH) {
         return 100000;
+    } else {
+        return 0;
     }
 }
 
@@ -132,7 +134,7 @@ void hashIteratively(char *str, char target[EVP_MAX_MD_SIZE * 2], int iterations
 
 
     // Copy the final result to the target buffer.
-    strncpy(target, dest, sizeof(dest));
+    strncpy(target, dest, EVP_MAX_MD_SIZE * 2);
 }
 
 /// @brief Checks if the password is in alignment with the region password.
@@ -165,9 +167,6 @@ int check_region_password(
         // In this case we just need to do the comparison;
         return strncmp(basepwd, region_pwd, sizeof(basepwd)) == 0;
     } else {
-        // Determine how many iterations we need.
-        int iterations = iterations_for_level(level);
-
         // Expand the region password.
         char region_pwd_expanded[EVP_MAX_MD_SIZE * 2];
         hashIteratively(region_pwd, region_pwd_expanded, 1);
@@ -200,7 +199,6 @@ int try_lock(SubjugateOrderBook *handle, char *password)
     if (handle->ctrl == 2)
     {
         // We are locked, so we error and return a value.
-        // TODO: Switch return types to the correct ones.
         errno = EBUSY;
         return 0;
     }
@@ -208,24 +206,15 @@ int try_lock(SubjugateOrderBook *handle, char *password)
     // We indicate that we are currently doing stuff with the dataabse.
     handle->ctrl = 1;
 
-
     // Check if we have high traffic.
     int high_traffic_mode = handle->req_count > 25;
-
 
     // If we have high traffic let's be a bit more
     // liberal with the hashing as this is already enough.
     if(high_traffic_mode) {
         handle->security_level = (handle->security_level >> 1) & 3;
     }
-
-  
-    // printf("Sec Level: %d\n", handle->security_level);
-
-
     int result = check_region_password(handle->security_level, handle->id, password);
-
-
     // Make sure we bump this back down if we are in high traffic mnode.
     if(high_traffic_mode) {
         handle->security_level = (handle->security_level << 1) & 3;

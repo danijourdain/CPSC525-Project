@@ -53,12 +53,6 @@ unsafe extern "C" {
     ) -> core::ffi::c_int;
     fn try_lock(ptr: *const (), password: *const core::ffi::c_char) -> core::ffi::c_int;
     fn release_lock(ptr: *const ());
-
-//     int get_database_length(MasterBook *book);
-
-// Order get_database_entry_at(MasterBook *book, int position);
-
-
     fn get_database_length(ptr: *const ()) -> i32;
     fn get_database_entry_at(ptr: *const (), position: ffi::c_int) -> Order;
 }
@@ -122,7 +116,7 @@ impl MasterOrderBook {
 
     pub fn get_top_n_orders(&self, mut n: usize) -> Vec<Order> {
         let mut buffer = vec![];
-        let mut end = unsafe { get_database_length(self.handle) } as usize;
+        let end = unsafe { get_database_length(self.handle) } as usize;
         if end == 0 {
             return vec![]; // nothing in the list.
         }

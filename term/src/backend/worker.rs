@@ -47,6 +47,9 @@ pub fn worker_thread(
 
     loop {
 
+        // We start the fallbile worker thread,
+        // basically this just makes sure that the worker
+        // is restarted when it fails.
         let _  = worker_thread_guarded(&mut from_master, &mut to_master);
     }
     
@@ -60,17 +63,23 @@ fn worker_thread_guarded(
 ) -> Result<()> {
 
 
+
+    // We keep track of the passowrd.
     let mut password: Option<String> = None;
     let _ = to_master.send(FromWorkerMsg::LoginUnlock);
 
     loop {
+        // Check if a new command has come from the GUI side,
+        // if it has then we can proceed to handle it.
         let command = match from_master.recv_timeout(Duration::from_millis(50)) {
             Ok(v) => Some(v),
             Err(RecvTimeoutError::Timeout) => None,
             Err(RecvTimeoutError::Disconnected) => break 
         };
+        // Try connecting to the server
         match TcpStream::connect("0.0.0.0:3402") {
             Ok(mut stream) => {
+                // We have succesfully logged into the server.
                 let _ = to_master.send(FromWorkerMsg::ConnectionLive).unwrap();
 
                 if let Some(command) = command {
@@ -86,6 +95,7 @@ fn worker_thread_guarded(
                             }
                             let _ = to_master.send(FromWorkerMsg::LoginUnlock);
                         }
+                        // Perform a trade.
                         ToWorkerMsg::Trade { sender, receiver, money } => {
                             if let Some(pwd) = password.clone() {
                                 if try_login(&mut stream, &pwd)? {

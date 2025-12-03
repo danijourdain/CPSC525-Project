@@ -41,7 +41,7 @@ char *get_region_name(int id) {
 /// @param src The source line.
 /// @param n The field to access.
 /// @return The text.
-char *read_field(char *src, int n) {
+const char *read_field(char *src, int n) {
     const char* tok;
     for (tok = strtok(src, ",");
             tok && *tok;
@@ -61,7 +61,6 @@ int load_ledger_file(char *name) {
     struct stat buffer;
 
 
-    int did_exist = 0;
     // Let us first check if the database exists (i.e., do we need to write
     // the header file)
     if(stat(name, &buffer) != 0) {
@@ -154,15 +153,15 @@ int load_database(char *name, MasterBook *book) {
 
             // Restore and read.
             strncpy(line_restore, line, sizeof(line));
-            char *money = read_field(line_restore, 3);
+            const char *money = read_field(line_restore, 3);
 
             // Restore and read.
             strncpy(line_restore, line, sizeof(line));
-            char *sender = read_field(line_restore, 1);
+            const char *sender = read_field(line_restore, 1);
 
             // Restore and read.
             strncpy(line_restore, line, sizeof(line));
-            char *recipient = read_field(line_restore, 2);
+            const char *recipient = read_field(line_restore, 2);
             
             
             
@@ -359,6 +358,8 @@ int ledger_writeback(MasterBook *handle) {
 
     // Flush the file contents.
     fflush(handle->ledger_fd);
+
+    return 0;
 }
 
 
@@ -498,8 +499,8 @@ int read_out_ledger(int *balances, FILE *fp) {
             return -1;
         } else if(i > 0) {
             // Extract the CSV lines.
-            char *region_balance_str = read_field(line, 2);
-            char *region_id_str = read_field(line, 1);
+            const char *region_balance_str = read_field(line, 2);
+            const char *region_id_str = read_field(line, 1);
             if(region_id_str == NULL || region_balance_str == NULL) {
                 return -1; // One of the pointers is NULL.
             }

@@ -3,10 +3,9 @@
 
 use std::{
     io::{ErrorKind, Read, Write},
-    net::{SocketAddr, TcpListener, TcpStream},
+    net::{TcpListener, TcpStream},
     sync::Arc,
-    thread::{sleep, spawn},
-    time::Duration,
+    thread::spawn,
 };
 
 use anyhow::{Result, anyhow};
@@ -69,7 +68,7 @@ fn write_i32(stream: &mut TcpStream, value: i32) -> std::io::Result<()> {
 fn conn_handler(
     state: Arc<MasterOrderBook>,
     mut stream: TcpStream,
-    addr: SocketAddr,
+    // addr: SocketAddr,
 ) -> Result<()> {
     let mut auth: Option<AcquiredOrderServer<'_>> = None;
 
@@ -80,7 +79,6 @@ fn conn_handler(
             let region = read_u8(&mut stream)? as i32;
             let password = read_string(&mut stream)?;
 
-            // println!("Trying with password: {password}");
 
             let Some(server) = state.get_region_server(region) else {
                 return Err(anyhow!("failed to retrieve region ID."));
@@ -178,12 +176,12 @@ fn start_app() -> Result<()> {
 
     loop {
         // Accept a new connection.
-        let (stream, addr) = listener.accept()?;
+        let (stream, _) = listener.accept()?;
 
         // Spawn a thread to handle the connection
         spawn({
             let master = Arc::clone(&master);
-            move || conn_handler(master, stream, addr)
+            move || conn_handler(master, stream)
         });
     }
 }

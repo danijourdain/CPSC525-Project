@@ -1,37 +1,46 @@
-
 use chrono::Utc;
 use ratatui::{
-    buffer::Buffer, layout::{Constraint, Direction, Layout}, style::{Color, Modifier, Style, Stylize}, text::ToLine, widgets::{Block, BorderType, Borders, Cell, Padding, Paragraph, Row, Table, Widget}
+    buffer::Buffer,
+    layout::{Constraint, Direction, Layout},
+    style::{Color, Modifier, Style, Stylize},
+    text::ToLine,
+    widgets::{Block, BorderType, Borders, Cell, Padding, Paragraph, Row, Table, Widget},
 };
 
 use crate::gui::format_money_accounting;
 
-// #[derive(Debug)]
+/// The ledger window.
 pub struct Ledger {
+    /// The trades that we have done.
     trades: Vec<Trade>,
+    /// If the ledger window is currently selected.
     selected: bool,
-    focused: bool
-
+    /// If the ledger is currently focused.
+    focused: bool,
 }
 
 impl Ledger {
+    /// Creates a new empty ledger.
     pub fn new() -> Self {
         Self {
             trades: vec![],
             selected: false,
-            focused: false
+            focused: false,
         }
     }
-
+    /// Sets the order/trade list.
     pub fn set_order_list(&mut self, list: Vec<Trade>) {
         self.trades = list;
     }
+    /// Sets the selection status.
     pub fn set_selected(&mut self, select: bool) {
         self.selected = select;
     }
+    /// Sets if the ledger window is focused.
     pub fn set_focused(&mut self, highlight: bool) {
         self.focused = highlight;
     }
+    /// Resets the selection/focus status.
     pub fn reset(&mut self) {
         self.set_focused(false);
         self.set_selected(false);
@@ -39,78 +48,84 @@ impl Ledger {
 }
 
 impl Widget for &Ledger {
+    /// Renders the widget.
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
     where
         Self: Sized,
     {
         let outer = Block::bordered()
-        .title(" LEDGER ".to_line().centered())
-         .border_style(if self.selected {
+            .title(" LEDGER ".to_line().centered())
+            .border_style(if self.selected {
                 Style::new().fg(ratatui::style::Color::Yellow)
             } else if self.focused {
                 Style::new().fg(ratatui::style::Color::Blue)
             } else {
                 Style::default()
             })
-        .border_type(BorderType::Rounded);
-    outer.clone().render(area, buf);
+            .border_type(BorderType::Rounded);
+        outer.clone().render(area, buf);
 
-    let inner = outer.inner(area);
+        let inner = outer.inner(area);
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(2), Constraint::Fill(1)])
-        .split(inner);
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(2), Constraint::Fill(1)])
+            .split(inner);
 
+        let top_part = Layout::new(
+            Direction::Horizontal,
+            [Constraint::Fill(1), Constraint::Length(11)],
+        )
+        .split(chunks[0]);
 
-    let top_part = Layout::new(Direction::Horizontal, [
-        Constraint::Fill(1), Constraint::Length(11)
-    ]).split(chunks[0]);
+        // Render the time, ideally a little bit cut off.
+        Paragraph::new(Utc::now().format("%H:%M:%SUTC").to_string())
+            // .italic()
+            .render(top_part[1], buf);
 
-    // Render the time, ideally a little bit cut off.
-    Paragraph::new(Utc::now().format("%H:%M:%SUTC").to_string())
-        // .italic()
-        .render(top_part[1], buf);
+        // Render the Header
+        Paragraph::new(" Latest Trades")
+            .italic()
+            .render(top_part[0], buf);
 
-    // Render the Header
-    Paragraph::new(" Latest Trades")
-        .italic()
-        .render(top_part[0], buf);
+        let divider = Block::default()
+            .borders(Borders::BOTTOM)
+            .style(Style::default());
+        divider.render(chunks[0], buf);
 
-
-    let divider = Block::default()
-        .borders(Borders::BOTTOM)
-        .style(Style::default());
-    divider.render(chunks[0], buf);
-
-    render_table(buf, chunks[1], &self.trades);
-
+        render_table(buf, chunks[1], &self.trades);
     }
 }
 
-
+/// Represents a trade object from the
+/// system.
 #[derive(Debug)]
 pub struct Trade {
+    /// The ID of the sender.
     pub sender: usize,
+    /// The ID of the receiver.
     pub receiver: usize,
-    pub money: usize
+    /// The amount of money.
+    pub money: usize,
 }
 
-
 impl Trade {
+    /// Creates a new trade from the provided parameters.
     pub fn new(sender: usize, receiver: usize, money: usize) -> Self {
         Self {
             sender,
             receiver,
-            money
+            money,
         }
     }
 }
 
+
+/// Converts an ID to a region name.
 fn id_to_region_name(id: usize) -> String {
     if id == 0 {
         "Calgary".to_string()
-    } else if id == 1 { 
+    } else if id == 1 {
         "New York".to_string()
     } else if id == 2 {
         "Signapore".to_string()
@@ -119,6 +134,7 @@ fn id_to_region_name(id: usize) -> String {
     }
 }
 
+/// Renders the table.
 fn render_table(frame: &mut Buffer, area: ratatui::layout::Rect, trades: &[Trade]) {
     // Optional: split area so table only uses part of the screen
     let chunks = Layout::default()
@@ -132,38 +148,47 @@ fn render_table(frame: &mut Buffer, area: ratatui::layout::Rect, trades: &[Trade
         Cell::from("Receiver"),
         Cell::from("Money"),
     ])
-    
     .style(
         Style::default()
             .fg(Color::Yellow)
-            .add_modifier(Modifier::BOLD)
-            
+            .add_modifier(Modifier::BOLD),
     )
-    
     .bottom_margin(1); // space between header and rows
 
-
-    let rows = trades.into_iter()
-        .map(|Trade { sender, receiver, money }| {
-
+    let rows = trades.into_iter().map(
+        |Trade {
+             sender,
+             receiver,
+             money,
+         }| {
             let imoney = if *receiver == 0 {
                 *money as isize
             } else {
                 (*money as isize) * -1
             };
-            // if *sender 
+            // if *sender
 
-            Row::new(vec![ id_to_region_name(*sender), id_to_region_name(*receiver), format_money_accounting(imoney) ])
-        });
+            Row::new(vec![
+                id_to_region_name(*sender),
+                id_to_region_name(*receiver),
+                format_money_accounting(imoney),
+            ])
+        },
+    );
 
     // Build table
-    let table = Table::new(rows, [
-        Constraint::Fill(1), Constraint::Fill(1), Constraint::Fill(1)
-    ])
-        .header(header)
-        .block(Block::new().padding(Padding::left(1)))
-        .column_spacing(1) // space between columns
-        .highlight_symbol(">> ");
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Fill(1),
+            Constraint::Fill(1),
+            Constraint::Fill(1),
+        ],
+    )
+    .header(header)
+    .block(Block::new().padding(Padding::left(1)))
+    .column_spacing(1) // space between columns
+    .highlight_symbol(">> ");
 
     table.render(chunks[0], frame);
 }
