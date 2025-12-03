@@ -4,7 +4,7 @@
 
 
 /// @brief Initializes a new channel with no elements.
-/// @param chan The pointer to the channel to intialize.
+/// @param chan The pointer to the channel to initialize.
 void init_channel(Channel *chan) {
     chan->head = NULL;
     pthread_mutex_init(&chan->mutex, NULL);

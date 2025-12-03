@@ -203,7 +203,7 @@ int try_lock(SubjugateOrderBook *handle, char *password)
     // to enable more requests. The logic lowers the level by one, and then runs 
     // the hashing, then raises it, as to keep the level the same.
     //
-    // This inoocent logic actually causes a race condition where if
+    // This innocent logic actually causes a race condition where if
     // two programs run at once and high traffic mode is triggered, the
     // level could be reduced to zero, turning it off!
     //
@@ -220,7 +220,7 @@ int try_lock(SubjugateOrderBook *handle, char *password)
         return 0;
     }
 
-    // We indicate that we are currently doing stuff with the dataabse.
+    // We indicate that we are currently doing stuff with the database.
     handle->ctrl = 1;
 
     // Check if we have high traffic.
@@ -232,7 +232,7 @@ int try_lock(SubjugateOrderBook *handle, char *password)
         handle->security_level = (handle->security_level >> 1) & 3;
     }
     int result = check_region_password(handle->security_level, handle->id, password);
-    // Make sure we bump this back down if we are in high traffic mnode.
+    // Make sure we bump this back down if we are in high traffic mode.
     if(high_traffic_mode) {
         handle->security_level = (handle->security_level << 1) & 3;
     }
@@ -270,7 +270,7 @@ __uint32_t fetch_current_user(SubjugateOrderBook *handle)
 
 /// @brief Opens a new record.
 /// @param handle The handle to the orderbook.
-/// @return If we were able to succesfully open a new record.
+/// @return If we were able to successfully open a new record.
 int open_record(SubjugateOrderBook *handle)
 {
 
@@ -385,7 +385,7 @@ void log_last_order(SubjugateOrderBook *handle)
 
 /// @brief Closes the server and frees the resources.
 /// @param handle the handle to the server.
-/// @return if it is succesful
+/// @return if it is successful
 int close_server(SubjugateOrderBook *handle)
 {
 

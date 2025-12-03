@@ -5,7 +5,7 @@
 
 /** BUFFER STUFF */
 
-/// @brief Initiaizes a buffer to a start state.
+/// @brief Initializes a buffer to a start state.
 /// @param ptr The pointer to the buffer.
 void init_buffer(Buffer *ptr)
 {

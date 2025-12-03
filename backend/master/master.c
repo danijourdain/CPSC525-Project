@@ -287,7 +287,7 @@ int write_order(int fd, Order order) {
     }
 
 
-    // We were able to write the order succesfully.
+    // We were able to write the order successfully.
     return 0; 
 }
 
@@ -603,7 +603,7 @@ int push_records(MasterBook *ptr, Buffer *src) {
 
 /// @brief Closes the master's server, this is when it is released.
 /// @param ptr the ptr to the master server
-/// @return if we succesfully closed the master server
+/// @return if we successfully closed the master server
 int close_master_server(MasterBook *ptr) {
     // NOTE: You may be wondering, what happens to our file,
     // well, funny you should ask! It is managed by the background
